@@ -53,7 +53,11 @@ Research question: <question>${task.question}</question>${localBlock}`;
     return `[[${offset + i}]]`;
   });
   hits.forEach((h) =>
-    rawSources.push({ url: `local://${encodeURI(h.chunk.file)}#chunk-${h.chunk.index + 1}`, title: h.chunk.file, kind: "local" }),
+    rawSources.push(
+      h.chunk.url
+        ? { url: h.chunk.url, title: h.chunk.file, kind: "web" }
+        : { url: `local://${encodeURI(h.chunk.file)}#chunk-${h.chunk.index + 1}`, title: h.chunk.file, kind: "local" },
+    ),
   );
 
   rawSources = await resolveRedirects(rawSources);

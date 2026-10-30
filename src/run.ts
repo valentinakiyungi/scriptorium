@@ -54,8 +54,18 @@ export interface RunResult extends RunSummary {
   usage: Usage;
 }
 
+export interface ReferenceDoc {
+  name: string;
+  text: string;
+  url?: string;
+}
+
 export interface RunOptions {
   llm: LLM;
+  /** Extra documents attached for this run only (files, pasted text, fetched URLs). */
+  references?: ReferenceDoc[];
+  /** Abort the run (e.g. the user pressed Stop). */
+  signal?: AbortSignal;
   onEvent?: (e: RunEvent) => void;
   save?: boolean;
   outputDir?: string;
@@ -82,6 +92,7 @@ export async function runScriptorium(request: DraftRequest, opts: RunOptions): P
   const cfg = settings();
   const emit = opts.onEvent ?? (() => {});
   const corpus = LocalCorpus.load(request.dataDir ?? cfg.dataDir);
+  for (const ref of opts.references ?? []) if (ref.text?.trim()) corpus.addDocument(ref.name, ref.text, ref.url);
   const graph = buildGraph({ llm: opts.llm, corpus, passScore: cfg.passScore });
   const started = Date.now();
   const id = `${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}-${slugify(request.topic).slice(0, 40)}`;
@@ -89,7 +100,7 @@ export async function runScriptorium(request: DraftRequest, opts: RunOptions): P
   emit({ type: "start", request, model: opts.llm.name, localChunks: corpus.size });
 
   let state: Partial<State> = {};
-  const stream = await graph.stream({ request }, { streamMode: ["updates", "values"], recursionLimit: 200 });
+  const stream = await graph.stream({ request }, { streamMode: ["updates", "values"], recursionLimit: 200, signal: opts.signal });
   for await (const chunk of stream as AsyncIterable<[string, any]>) {
     const [mode, data] = chunk;
     if (mode === "values") {

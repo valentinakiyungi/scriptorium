@@ -73,7 +73,12 @@ cp .env.example .env        # then paste your key into GEMINI_API_KEY
 npm run web                 # http://localhost:3000
 ```
 
-Pick a document type, enter a topic and watch the agents work: the pipeline panel lights up each agent, the activity log streams every supervisor decision, and the draft appears as soon as it's assembled. Tabs show the cited sources, the reviewer's scorecards and the planner's outline; past documents live under **History**.
+- **No `.env` editing needed** — click the settings button, paste your Gemini key, hit *Test connection*, then *Save*.
+- Pick a document type chip, type a topic (or click a suggested one) and press **Draft** (`⌘/Ctrl + Enter`).
+- **Reference sources** — attach files, URLs or pasted text; researchers search and cite them alongside the web.
+- Watch the **Agent team** card light up each agent, follow every supervisor decision in **Activity**, and see the reviewer's scorecard under **Quality**. Press **Stop** to cancel a run.
+- Switch between the **Document**, **Outline** and **Evidence** views; copy Markdown, download `.md`/`.html`, or print to PDF.
+- Light/dark theme, works on mobile, and every finished document is saved under **History**.
 
 ### Command line
 

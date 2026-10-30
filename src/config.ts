@@ -16,6 +16,24 @@ export function loadEnv(file = path.join(process.cwd(), ".env")): void {
   }
 }
 
+/** Update keys in .env (creating it if needed), preserving comments and other lines. */
+export function saveEnv(updates: Record<string, string>, file = path.join(process.cwd(), ".env")): void {
+  const lines = fs.existsSync(file) ? fs.readFileSync(file, "utf8").split(/\r?\n/) : [];
+  const pending = new Map(Object.entries(updates));
+  const out = lines.map((line) => {
+    const m = line.match(/^\s*#?\s*([A-Z0-9_]+)\s*=/);
+    if (m && pending.has(m[1])) {
+      const v = pending.get(m[1])!;
+      pending.delete(m[1]);
+      return `${m[1]}=${v}`;
+    }
+    return line;
+  });
+  for (const [k, v] of pending) out.push(`${k}=${v}`);
+  fs.writeFileSync(file, out.join("\n").replace(/\n*$/, "\n"), { mode: 0o600 });
+  for (const [k, v] of Object.entries(updates)) process.env[k] = v;
+}
+
 export interface Settings {
   apiKey?: string;
   model: string;

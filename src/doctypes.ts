@@ -15,6 +15,8 @@ export interface DocType {
   defaultAudience: string;
   tone: string;
   targetWords: number;
+  /** Example topics shown as one-click suggestions in the UI. */
+  examples: string[];
   sections: SectionTemplate[];
   rubric: string[];
 }
@@ -29,6 +31,7 @@ const s = (id: string, heading: string, goal: string, research = true): SectionT
 export const DOC_TYPES: DocType[] = [
   {
     id: "research-report",
+    examples: ["The state of grid-scale battery storage in 2026", "How AI is changing radiology workloads"],
     label: "Research Report",
     description: "In-depth, evidence-led report on a topic with findings and implications.",
     defaultAudience: "informed professionals",
@@ -51,6 +54,7 @@ export const DOC_TYPES: DocType[] = [
   },
   {
     id: "literature-review",
+    examples: ["Effects of remote work on employee productivity", "Microplastics and human health"],
     label: "Literature Review",
     description: "Synthesis of existing studies and sources: themes, debates and gaps.",
     defaultAudience: "researchers and graduate students",
@@ -73,6 +77,7 @@ export const DOC_TYPES: DocType[] = [
   },
   {
     id: "executive-brief",
+    examples: ["Adopting AI coding assistants in a 200-person engineering org", "Should we move our data platform to a lakehouse?"],
     label: "Executive Brief",
     description: "One-to-two page decision brief for a busy leader.",
     defaultAudience: "senior executives",
@@ -93,6 +98,7 @@ export const DOC_TYPES: DocType[] = [
   },
   {
     id: "policy-memo",
+    examples: ["Reducing urban heat island effects in mid-sized cities", "Regulating e-scooter sharing schemes"],
     label: "Policy Memo",
     description: "Problem, options and recommendation for a policy decision-maker.",
     defaultAudience: "policy makers and their staff",
@@ -114,6 +120,7 @@ export const DOC_TYPES: DocType[] = [
   },
   {
     id: "technical-whitepaper",
+    examples: ["Retrieval-augmented generation for enterprise search", "Passkeys as a replacement for passwords"],
     label: "Technical Whitepaper",
     description: "Explains a technology or approach, its architecture and trade-offs.",
     defaultAudience: "engineers and technical decision-makers",
@@ -136,6 +143,7 @@ export const DOC_TYPES: DocType[] = [
   },
   {
     id: "blog-article",
+    examples: ["Why microplastics are showing up in drinking water", "What actually happens when you recycle a plastic bottle"],
     label: "Blog Article",
     description: "Engaging, well-sourced explainer for a general audience.",
     defaultAudience: "curious general readers",
@@ -157,6 +165,7 @@ export const DOC_TYPES: DocType[] = [
   },
   {
     id: "grant-proposal",
+    examples: ["A community programme to improve adult digital literacy", "Low-cost air quality sensors for schools"],
     label: "Grant Proposal",
     description: "Funding proposal: need, aims, methods, impact and budget outline.",
     defaultAudience: "grant reviewers",

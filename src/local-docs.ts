@@ -4,6 +4,8 @@ import * as path from "node:path";
 /** A chunk of a local document. */
 export interface Chunk {
   file: string;
+  /** Set when the chunk came from a web page the user attached. */
+  url?: string;
   index: number;
   text: string;
   terms: Map<string, number>;
@@ -66,11 +68,17 @@ export class LocalCorpus {
     return corpus;
   }
 
-  add(file: string, index: number, text: string): void {
+  /** Chunk and index a whole document (e.g. a file, URL or pasted text attached in the UI). */
+  addDocument(file: string, text: string, url?: string): void {
+    chunkText(text).forEach((t, i) => this.add(file, i, t, url));
+    this.finish();
+  }
+
+  add(file: string, index: number, text: string, url?: string): void {
     const toks = tokenize(text);
     const terms = new Map<string, number>();
     for (const t of toks) terms.set(t, (terms.get(t) ?? 0) + 1);
-    this.chunks.push({ file, index, text, terms, length: toks.length });
+    this.chunks.push({ file, url, index, text, terms, length: toks.length });
   }
 
   finish(): void {
