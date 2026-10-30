@@ -70,6 +70,8 @@
   .header-actions { display: flex; gap: 6px; }
   .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border: 1px solid color-mix(in srgb, var(--blue) 40%, transparent); border-radius: 8px; background: var(--surface); color: var(--blue); }
   .icon-btn:hover { border-color: var(--blue); background: var(--surface-alt); color: var(--blue-dark); }
+  .icon-btn.gh { border-color: #1f883d; background: #1f883d; color: #fff; box-shadow: 0 10px 24px rgba(31, 136, 61, 0.24); }
+  .icon-btn.gh:hover { background: #1a7f37; border-color: #1a7f37; color: #fff; }
   .icon-btn.has-dot { position: relative; }
   .icon-btn.has-dot::after { content: ""; position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 2px var(--surface); }
 
@@ -371,7 +373,7 @@
         </div>
         <div class="key-needed" id="keyNeeded" hidden>
           <span data-icon="key"></span>
-          <span>Connect a Gemini API key to start drafting.</span>
+          <span id="keyMsg">Connect a Gemini API key to start drafting.</span>
           <button class="link-btn" id="keyLink">Add key <span data-icon="arrow"></span></button>
         </div>
         <div class="suggestions" id="suggestions"></div>
@@ -455,7 +457,7 @@
 <div class="modal" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
   <div class="modal-card">
     <div class="modal-header"><h2 id="settingsTitle">Settings</h2><button class="tool" data-close aria-label="Close"></button></div>
-    <p class="hint">Scriptorium uses Google Gemini. Create a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>. It is saved to the <code>.env</code> file on this computer and never leaves it except in requests to Google.</p>
+    <p class="hint" id="keyPrivacy">Scriptorium uses Google Gemini. Create a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>. It is saved to the <code>.env</code> file on this computer and never leaves it except in requests to Google.</p>
     <p class="hint"><b>Free keys</b> allow about 20 requests per model per day; one document uses roughly 12–25. Scriptorium moves to another model when one runs out. For heavier use, <a href="https://aistudio.google.com/" target="_blank" rel="noopener">enable billing in AI Studio</a> — limits rise immediately and a document typically costs a few cents.</p>
     <label class="field">Gemini API key<input type="password" id="sKey" autocomplete="off" placeholder="Paste your key" /><small id="sKeyHint"></small></label>
     <div class="two">
@@ -499,6 +501,8 @@
     </ul>
     <h3>Shortcuts</h3>
     <ul><li><kbd>⌘/Ctrl</kbd> + <kbd>Enter</kbd> — draft &nbsp;·&nbsp; <kbd>Esc</kbd> — close dialogs</li></ul>
+    <h3>Run it locally</h3>
+    <ul><li><code>git clone</code> the repository, then <code>npm install</code> and <code>npm run web</code> — adds a local research corpus (<code>./data</code>) and saves every document to disk.</li></ul>
     <h3>Command line</h3>
     <ul><li><code>npm run draft -- "your topic" --type policy-memo</code></li><li><code>npm run bench</code> — benchmark all document types</li></ul>
   </div>
@@ -631,6 +635,42 @@ function docHtml(markdown, refs) {
   return html;
 }
 
+// ── API layer: local Node server, or the in-browser pipeline on GitHub Pages ─────
+const post = (url, body) => fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+const serverApi = {
+  mode: "server",
+  config: async () => (await fetch("/api/config")).json(),
+  getSettings: async () => (await fetch("/api/settings")).json(),
+  saveSettings: async (b) => (await post("/api/settings", b)).json(),
+  testKey: async (b) => (await post("/api/settings/test", b)).json(),
+  models: async (b) => (await post("/api/models", b)).json(),
+  fetchUrl: async (url) => { const r = await post("/api/fetch-url", { url }); return r.json(); },
+  history: async () => (await fetch("/api/history")).json(),
+  historyItem: async (id) => (await fetch(`/api/history/${encodeURIComponent(id)}`)).json(),
+  async startRun(body, onEvent) {
+    const r = await post("/api/runs", body);
+    const j = await r.json();
+    if (!r.ok) throw Object.assign(new Error(j.error), { code: j.code });
+    const es = new EventSource(`/api/runs/${j.id}/events`);
+    let finished = false;
+    es.onmessage = async (m) => {
+      const ev = JSON.parse(m.data);
+      if (ev.type === "done") {
+        es.close(); finished = true;
+        onEvent({ type: "result", result: await (await fetch(`/api/runs/${j.id}/run.json`)).json() });
+      } else {
+        if (ev.type === "error") { es.close(); finished = true; }
+        onEvent(ev);
+      }
+    };
+    es.onerror = () => { if (es.readyState === 2 && !finished) onEvent({ type: "error", message: "Lost connection to the Scriptorium server." }); };
+    return j.id;
+  },
+  cancel: async (id) => { await post(`/api/runs/${id}/cancel`, {}).catch(() => {}); },
+};
+const api = window.ScriptoriumBrowser ? window.ScriptoriumBrowser.createApi() : serverApi;
+const STATIC = api.mode === "static";
+
 // ── State ────────────────────────────────────────────────────────────────────
 const S = {
   config: null, docType: store.get("docType", "research-report"), view: "document",
@@ -736,9 +776,8 @@ async function addUrl() {
   const url = $("urlInput").value.trim(); if (!url) return;
   $("urlAdd").disabled = true; $("urlAdd").innerHTML = icon("loader", "spin"); refError("");
   try {
-    const r = await fetch("/api/fetch-url", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url }) });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error);
+    const j = await api.fetchUrl(url);
+    if (j.error) throw new Error(j.error);
     S.references.push(j); $("urlInput").value = ""; $("urlRow").hidden = true; renderRefs();
   } catch (e) { refError(e.message); }
   $("urlAdd").disabled = false; $("urlAdd").textContent = "Add";
@@ -802,16 +841,16 @@ function renderSources() {
 }
 async function renderHistory() {
   try {
-    const items = await (await fetch("/api/history")).json();
+    const items = await api.history();
     $("history").innerHTML = items.length
       ? items.map((i) => `<li><button data-hist="${esc(i.id)}"><b>${esc(i.title)}</b><small>${esc((S.config?.docTypes.find((t) => t.id === i.docType) || {}).label || i.docType)} · ${i.words ?? "?"} words · ${i.score ?? "–"}/10 · ${esc(i.id.slice(0, 10))}</small></button></li>`).join("")
-      : `<p class="muted-note">Finished documents are saved and listed here.</p>`;
+      : `<p class="muted-note">${STATIC ? "Your finished documents are saved in this browser and listed here." : "Finished documents are saved and listed here."}</p>`;
   } catch { $("history").innerHTML = ""; }
 }
 $("history").onclick = async (e) => {
   const b = e.target.closest("[data-hist]"); if (!b || S.running) return;
-  const r = await (await fetch(`/api/history/${encodeURIComponent(b.dataset.hist)}`)).json();
-  loadResult(r); window.scrollTo({ top: 0, behavior: "smooth" });
+  const r = await api.historyItem(b.dataset.hist);
+  if (r) loadResult(r); window.scrollTo({ top: 0, behavior: "smooth" });
 };
 
 // ── Document frame ───────────────────────────────────────────────────────────
@@ -861,7 +900,8 @@ function setRunning(on) {
   S.running = on;
   $("assist").classList.toggle("running", on);
   $("go").className = on ? "primary stop" : "primary";
-  $("go").innerHTML = on ? `${icon("stop")}<span>Stop</span>` : `${icon("feather")}<span>Draft</span>`;
+  const demo = STATIC && !S.config?.hasKey;
+  $("go").innerHTML = on ? `${icon("stop")}<span>Stop</span>` : demo ? `${icon("sparkles")}<span>Try demo</span>` : `${icon("feather")}<span>Draft</span>`;
   $("go").disabled = !on && !S.config?.ready;
   renderTypes();
 }
@@ -887,35 +927,27 @@ async function start() {
   if (!topic) { $("topic").focus(); toast("Describe a topic first"); return; }
   resetRun(); setRunning(true); S.stage = 0; renderAll();
   const body = { topic, docType: S.docType, audience: $("audience").value.trim(), instructions: $("instructions").value.trim(), maxQuestions: S.opts.maxQuestions, maxRevisions: S.opts.maxRevisions, web: $("web").checked, references: S.references };
-  let j;
   try {
-    const r = await fetch("/api/runs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-    j = await r.json();
-    if (!r.ok) throw Object.assign(new Error(j.error), { code: j.code });
-  } catch (e) { S.error = e.message; setRunning(false); renderAll(); if (e.code === "NO_KEY") openSettings(); return; }
-  S.runId = j.id;
-  const es = (S.es = new EventSource(`/api/runs/${j.id}/events`));
-  es.onmessage = (m) => {
-    const ev = JSON.parse(m.data);
-    if (ev.type === "trace") onTrace(ev.event);
-    else if (ev.type === "plan") { S.plan = ev.plan; S.title = ev.plan.title; if (S.view === "outline") renderFrame(); }
-    else if (ev.type === "finding") { S.findings.push(ev.finding); if (S.view === "outline") renderFrame(); }
-    else if (ev.type === "draft") { S.markdown = ev.markdown; if (S.view === "document") renderFrame(); }
-    else if (ev.type === "review") { S.reviews.push(ev.review); renderQuality(); }
-    else if (ev.type === "error") { es.close(); S.error = ev.message; finish(); }
-    else if (ev.type === "done") {
-      es.close();
-      fetch(`/api/runs/${j.id}/run.json`).then((x) => x.json()).then((full) => {
-        Object.assign(S, { markdown: full.markdown, refs: full.references, sources: full.sources, findings: full.findings, plan: full.plan, metrics: full.metrics, title: full.title, stage: STAGES.length - 1 });
-        AGENTS.forEach(([a]) => { if (S.agentState[a]) S.agentState[a] = "done"; });
-        finish(); toast("Document ready"); renderHistory();
-      });
-    }
-  };
-  es.onerror = () => { if (es.readyState === 2 && S.running && !S.metrics) { S.error = S.error || "Lost connection to the server."; finish(); } };
+    S.runId = await api.startRun(body, onRunEvent);
+  } catch (e) { S.error = e.message; setRunning(false); renderAll(); if (e.code === "NO_KEY") openSettings(); }
+}
+function onRunEvent(ev) {
+  if (!S.running) return;
+  if (ev.type === "trace") onTrace(ev.event);
+  else if (ev.type === "plan") { S.plan = ev.plan; S.title = ev.plan.title; if (S.view === "outline") renderFrame(); }
+  else if (ev.type === "finding") { S.findings.push(ev.finding); if (S.view === "outline") renderFrame(); }
+  else if (ev.type === "draft") { S.markdown = ev.markdown; if (S.view === "document") renderFrame(); }
+  else if (ev.type === "review") { S.reviews.push(ev.review); renderQuality(); }
+  else if (ev.type === "error") { S.error = ev.message; finish(); }
+  else if (ev.type === "result") {
+    const full = ev.result;
+    Object.assign(S, { markdown: full.markdown, refs: full.references, sources: full.sources, findings: full.findings, plan: full.plan, metrics: full.metrics, title: full.title, stage: STAGES.length - 1 });
+    AGENTS.forEach(([a]) => { if (S.agentState[a]) S.agentState[a] = "done"; });
+    finish(); toast("Document ready"); renderHistory();
+  }
 }
 function finish() { for (const k in S.agentState) if (S.agentState[k] === "working") S.agentState[k] = S.error && k !== "supervisor" ? "error" : "done"; setRunning(false); renderAll(); }
-async function stop() { if (S.runId) await fetch(`/api/runs/${S.runId}/cancel`, { method: "POST" }).catch(() => {}); }
+async function stop() { if (S.runId) await api.cancel(S.runId); }
 $("go").onclick = start;
 
 // ── Settings & help modals ───────────────────────────────────────────────────
@@ -929,8 +961,11 @@ $("keyLink").onclick = () => openSettings();
 async function openSettings() {
   $("sResult").textContent = ""; $("sResult").className = "test-result"; $("sKey").value = "";
   try {
-    const s = await (await fetch("/api/settings")).json();
-    $("sKeyHint").textContent = s.hasKey ? `A key ending in ${s.keyHint} is saved. Leave blank to keep it.` : "No key saved yet.";
+    const s = await api.getSettings();
+    $("sKeyHint").innerHTML = s.hasKey
+      ? `A key ending in ${esc(s.keyHint)} is saved${STATIC ? " in this browser" : ""}. Leave blank to keep it.${STATIC ? ` <button class="link-btn" type="button" id="forgetKey" style="margin:0 0 0 6px">Remove key</button>` : ""}`
+      : "No key saved yet.";
+    if ($("forgetKey")) $("forgetKey").onclick = async () => { await api.saveSettings({ removeKey: true }); closeModals(); toast("Key removed from this browser"); loadConfig(); };
     $("sModel").value = s.model; $("sResearch").value = s.researchModel; $("sPass").value = s.passScore; $("sConc").value = s.concurrency;
   } catch {}
   openModal("settingsModal");
@@ -940,7 +975,7 @@ async function openSettings() {
 async function loadModels() {
   $("sModelHint").textContent = "";
   try {
-    const r = await (await fetch("/api/models", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ apiKey: $("sKey").value }) })).json();
+    const r = await api.models({ apiKey: $("sKey").value });
     if (!r.models?.length) { if (r.error) $("sModelHint").textContent = `Couldn't list models: ${r.error}`; return; }
     $("models").innerHTML = r.models.map((m) => `<option value="${esc(m.id)}">${esc(m.displayName)}</option>`).join("");
     const ids = r.models.map((m) => m.id);
@@ -955,25 +990,37 @@ $("sKey").addEventListener("change", loadModels);
 $("sModel").addEventListener("change", loadModels);
 $("sTest").onclick = async () => {
   $("sResult").className = "test-result"; $("sResult").innerHTML = `${icon("loader", "spin")}Testing…`;
-  const r = await (await fetch("/api/settings/test", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ apiKey: $("sKey").value, model: $("sModel").value }) })).json();
+  const r = await api.testKey({ apiKey: $("sKey").value, model: $("sModel").value });
   if (r.suggest) { $("sModel").value = r.suggest; loadModels(); }
   $("sResult").className = "test-result " + (r.ok ? "ok" : "bad");
   $("sResult").innerHTML = `${icon(r.ok ? "check" : "alert")}${esc(r.message)}`;
 };
 $("sSave").onclick = async () => {
-  await fetch("/api/settings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ apiKey: $("sKey").value, model: $("sModel").value.trim(), researchModel: $("sResearch").value.trim(), passScore: $("sPass").value, concurrency: $("sConc").value }) });
+  await api.saveSettings({ apiKey: $("sKey").value, model: $("sModel").value.trim(), researchModel: $("sResearch").value.trim(), passScore: $("sPass").value, concurrency: $("sConc").value });
   closeModals(); toast("Settings saved"); loadConfig();
 };
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
 async function loadConfig() {
   try {
-    S.config = await (await fetch("/api/config")).json();
-    $("keyNeeded").hidden = S.config.ready;
-    $("settingsBtn").classList.toggle("has-dot", !S.config.ready);
-    $("settingsBtn").title = S.config.ready ? `Settings · ${S.config.model}` : "Settings · API key needed";
+    S.config = await api.config();
+    const needKey = STATIC ? !S.config.hasKey : !S.config.ready;
+    $("keyNeeded").hidden = !needKey;
+    $("keyMsg").textContent = STATIC
+      ? "Demo mode — simulated agents and placeholder sources. Add your free Gemini API key for real, cited research; it stays in this browser."
+      : "Connect a Gemini API key to start drafting.";
+    $("settingsBtn").classList.toggle("has-dot", needKey);
+    $("settingsBtn").title = needKey ? "Settings · API key needed" : `Settings · ${S.config.model}`;
   } catch { S.config = { docTypes: [], ready: false }; S.error = "Can't reach the Scriptorium server. Is it still running?"; }
   setRunning(S.running); renderTypes(); renderAll();
+}
+if (STATIC) {
+  $("keyPrivacy").innerHTML = `Scriptorium runs entirely in your browser and uses Google Gemini. Create a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>. Your key is stored only in this browser and is sent only to Google — there is no Scriptorium server.`;
+  if (window.SCRIPTORIUM_REPO) {
+    const a = document.createElement("a");
+    a.className = "icon-btn gh"; a.href = window.SCRIPTORIUM_REPO; a.target = "_blank"; a.rel = "noopener"; a.title = "Source code on GitHub"; a.setAttribute("aria-label", "Source code on GitHub");
+    a.innerHTML = icon("code"); document.querySelector(".header-actions").appendChild(a);
+  }
 }
 renderRefs(); renderAgents(); loadConfig(); renderHistory();
 </script>

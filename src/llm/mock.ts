@@ -28,7 +28,7 @@ export class MockLLM implements LLM {
       const topic = tag(req.prompt, "topic") ?? "the topic";
       const sections = JSON.parse(tag(req.prompt, "sections") ?? "[]") as { id: string; heading: string; goal: string; needsResearch: boolean }[];
       out = {
-        title: `${titleCase(topic)}: An Evidence-Based Overview`,
+        title: titleCase(topic),
         summary: `A structured look at ${topic}.`,
         sections: sections.map((s) => ({
           id: s.id,
@@ -64,19 +64,20 @@ export class MockLLM implements LLM {
     if (req.purpose === "write") {
       const ids = [...(tag(req.prompt, "sources") ?? "").matchAll(/^\[(\d+)\]/gm)].map((m) => Number(m[1]));
       const heading = req.prompt.match(/<section id="[^"]*">([^<]+)<\/section>/)?.[1] ?? "Section";
+      const goal = (req.prompt.match(/^Goal: (.+)$/m)?.[1] ?? "").replace(/\.$/, "");
+      const questions = [...req.prompt.matchAll(/^Q: (.+?)(?: \(for this section\))?$/gm)].map((m) => m[1]).slice(0, 2);
       const revised = req.prompt.includes("<previous>");
       const c = (i: number) => (ids.length ? `[${ids[i % ids.length]}]` : "");
       out =
-        `${revised ? "Revised: " : ""}This section covers ${heading.toLowerCase()}. The evidence points to a clear pattern ${c(0)}, ` +
-        `with measurable effects reported across several independent sources ${c(1)}.\n\n` +
-        `- First, the scale of the issue is significant and growing ${c(2)}.\n` +
-        `- Second, outcomes vary by context and implementation ${c(0)}${c(3)}.\n` +
-        `- Third, the remaining uncertainty is mostly about long-term effects.\n\n` +
-        `Taken together, these points shape the recommendations later in this document, and they are supported by ` +
-        `the strongest available evidence gathered by the research team during this run.`;
+        `*Demo output${revised ? " (revised after review)" : ""} — with a Gemini API key, the writer agent drafts this section from live, cited web research.*\n\n` +
+        `In a live run, the **${heading}** section would ${goal ? goal.charAt(0).toLowerCase() + goal.slice(1) : "cover this part of the topic"}. ` +
+        `The writer receives the researchers' evidence for it and cites every claim inline ${c(0)}, drawing on several independent sources ${c(1)}.\n\n` +
+        (questions.length ? `Questions the researchers answered for this document include:\n\n${questions.map((q, i) => `- ${q} ${c(i + 2)}`).join("\n")}\n\n` : "") +
+        `After drafting, the assembler validates and renumbers these citations, and the reviewer scores the section against the ` +
+        `document type's rubric — sending it back for revision when evidence or clarity falls short ${c(3)}.`;
     } else {
       const q = tag(req.prompt, "question") ?? "the question";
-      out = `- Mock finding for: ${q}\n- Local evidence suggests a consistent trend [[L1]].`;
+      out = `- Demo finding for: ${q}\n- Drawn from your attached documents [[L1]].`;
     }
     await this.tick(req.prompt, out);
     return out;
@@ -85,17 +86,18 @@ export class MockLLM implements LLM {
   async search(req: TextRequest): Promise<GroundedResult> {
     const q = tag(req.prompt, "question") ?? "question";
     const slug = q.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40);
-    const s1 = `- A 2024 study found a 23% increase related to ${q.slice(0, 40)}.`;
-    const s2 = `\n- Official statistics report steady growth since 2019.`;
-    const s3 = `\n- Experts disagree on long-term effects.`;
+    const s1 = `- Demo evidence for "${q.slice(0, 60)}" — a live run returns facts and figures found with Google Search.`;
+    const s2 = `\n- A second, independently sourced demo point.`;
+    const s3 = `\n- Live research also notes where sources disagree.`;
     const text = s1 + s2 + s3;
-    const b = (s: string) => Buffer.byteLength(s, "utf8");
+    const enc = new TextEncoder();
+    const b = (s: string) => enc.encode(s).length;
     const res: GroundedResult = {
       text,
       chunks: [
-        { uri: `https://example.org/research/${slug}`, title: "example.org" },
-        { uri: "https://stats.example.gov/annual-report", title: "stats.example.gov" },
-        { uri: "https://journal.example.edu/review-2025?utm_source=x", title: "journal.example.edu" },
+        { uri: `https://example.org/research/${slug}`, title: "example.org (demo source)" },
+        { uri: "https://stats.example.gov/annual-report", title: "stats.example.gov (demo source)" },
+        { uri: "https://journal.example.edu/review?utm_source=x", title: "journal.example.edu (demo source)" },
       ],
       supports: [
         { startIndex: 0, endIndex: b(s1), text: s1, chunkIndices: [0] },

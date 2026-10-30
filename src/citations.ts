@@ -3,32 +3,35 @@ import type { GroundingSupport } from "./llm/types.ts";
 
 /**
  * Insert local citation markers [[k]] into grounded text using Gemini's groundingSupports.
- * Gemini reports segment offsets in UTF-8 bytes, so we operate on a Buffer.
+ * Gemini reports segment offsets in UTF-8 bytes, so we work on encoded bytes (browser-safe).
  */
 export function insertGroundingMarkers(text: string, supports: GroundingSupport[]): string {
   if (!supports.length) return text;
-  const buf = Buffer.from(text, "utf8");
+  const enc = new TextEncoder();
+  const bytes = enc.encode(text);
   // Merge supports that end at the same byte offset.
   const byEnd = new Map<number, Set<number>>();
   for (const sp of supports) {
     let end = sp.endIndex;
-    if (end <= 0 || end > buf.length) {
+    if (end <= 0 || end > bytes.length) {
       // Fall back to locating the segment text.
       const at = sp.text ? text.indexOf(sp.text) : -1;
       if (at === -1) continue;
-      end = Buffer.byteLength(text.slice(0, at + sp.text.length), "utf8");
+      end = enc.encode(text.slice(0, at + sp.text.length)).length;
     }
     const set = byEnd.get(end) ?? new Set<number>();
     sp.chunkIndices.forEach((i) => set.add(i));
     byEnd.set(end, set);
   }
-  const ends = [...byEnd.keys()].sort((a, b) => b - a);
-  let out = buf;
+  const dec = new TextDecoder();
+  const ends = [...byEnd.keys()].sort((a, b) => a - b);
+  let out = "";
+  let last = 0;
   for (const end of ends) {
-    const marks = [...byEnd.get(end)!].sort((a, b) => a - b).map((i) => `[[${i}]]`).join("");
-    out = Buffer.concat([out.subarray(0, end), Buffer.from(marks, "utf8"), out.subarray(end)]);
+    out += dec.decode(bytes.subarray(last, end)) + [...byEnd.get(end)!].sort((a, b) => a - b).map((i) => `[[${i}]]`).join("");
+    last = end;
   }
-  return out.toString("utf8");
+  return out + dec.decode(bytes.subarray(last));
 }
 
 /** Canonical key for de-duplicating sources across researchers. */

@@ -1,6 +1,3 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
-
 /** A chunk of a local document. */
 export interface Chunk {
   file: string;
@@ -25,7 +22,7 @@ export function tokenize(s: string): string[] {
     .filter((t) => t.length > 1 && !STOP.has(t));
 }
 
-function chunkText(text: string, size = 1200): string[] {
+export function chunkText(text: string, size = 1200): string[] {
   const paras = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
   const chunks: string[] = [];
   let cur = "";
@@ -49,24 +46,6 @@ export class LocalCorpus {
   readonly chunks: Chunk[] = [];
   private df = new Map<string, number>();
   private avgLen = 0;
-
-  static load(dir?: string): LocalCorpus {
-    const corpus = new LocalCorpus();
-    if (!dir || !fs.existsSync(dir)) return corpus;
-    const walk = (d: string): string[] =>
-      fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => {
-        const p = path.join(d, e.name);
-        if (e.isDirectory()) return walk(p);
-        // README files describe the folder itself, so they are never treated as sources.
-        return /\.(md|markdown|txt)$/i.test(e.name) && !/^readme\./i.test(e.name) ? [p] : [];
-      });
-    for (const file of walk(dir)) {
-      const rel = path.relative(dir, file);
-      chunkText(fs.readFileSync(file, "utf8")).forEach((text, index) => corpus.add(rel, index, text));
-    }
-    corpus.finish();
-    return corpus;
-  }
 
   /** Chunk and index a whole document (e.g. a file, URL or pasted text attached in the UI). */
   addDocument(file: string, text: string, url?: string): void {

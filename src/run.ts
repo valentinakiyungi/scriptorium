@@ -1,173 +1,31 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { countCitations } from "./citations.ts";
 import { settings } from "./config.ts";
-import { getDocType } from "./doctypes.ts";
-import { buildGraph, type State } from "./graph.ts";
-import { LocalCorpus } from "./local-docs.ts";
-import type { LLM } from "./llm/types.ts";
-import type { DraftRequest, Finding, Plan, Review, SectionDraft, Source, TraceEvent, Usage } from "./types.ts";
+import { loadCorpus } from "./local-docs-node.ts";
+import { runPipeline, type PipelineOptions, type RunResult } from "./pipeline.ts";
+import type { DraftRequest } from "./types.ts";
 
-export type RunEvent =
-  | { type: "start"; request: DraftRequest; model: string; localChunks: number }
-  | { type: "trace"; event: TraceEvent }
-  | { type: "plan"; plan: Plan }
-  | { type: "finding"; finding: Pick<Finding, "id" | "question" | "sectionId" | "ms"> & { sources: number } }
-  | { type: "section"; section: SectionDraft }
-  | { type: "draft"; markdown: string; iteration: number }
-  | { type: "review"; review: Review }
-  | { type: "done"; result: RunSummary }
-  | { type: "error"; message: string };
+export * from "./pipeline.ts";
 
-export interface RunMetrics {
-  totalMs: number;
-  agentMs: Record<string, number>;
-  llmCalls: number;
-  promptTokens: number;
-  outputTokens: number;
-  researchQuestions: number;
-  uniqueSources: number;
-  citedReferences: number;
-  citations: number;
-  words: number;
-  revisions: number;
-  finalScore: number | null;
-}
-
-export interface RunSummary {
-  id: string;
-  title: string;
-  docType: string;
-  outputDir?: string;
-  metrics: RunMetrics;
-}
-
-export interface RunResult extends RunSummary {
-  request: DraftRequest;
-  plan: Plan;
-  markdown: string;
-  references: Source[];
-  sources: Source[];
-  findings: Finding[];
-  reviews: Review[];
-  trace: TraceEvent[];
-  usage: Usage;
-}
-
-export interface ReferenceDoc {
-  name: string;
-  text: string;
-  url?: string;
-}
-
-export interface RunOptions {
-  llm: LLM;
-  /** Extra documents attached for this run only (files, pasted text, fetched URLs). */
-  references?: ReferenceDoc[];
-  /** Abort the run (e.g. the user pressed Stop). */
-  signal?: AbortSignal;
-  onEvent?: (e: RunEvent) => void;
+export interface RunOptions extends Omit<PipelineOptions, "corpus" | "passScore"> {
+  /** Save document.md + run.json under the output folder (default true). */
   save?: boolean;
   outputDir?: string;
 }
 
-export function slugify(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "document";
-}
-
-export function defaultRequest(partial: Partial<DraftRequest> & { topic: string }): DraftRequest {
-  return {
-    docType: "research-report",
-    maxRevisions: 1,
-    maxQuestions: 6,
-    web: true,
-    ...partial,
-  };
-}
-
-/** Run the full Supervisor-Worker pipeline for one document. */
+/** Node entry point: loads ./data, runs the pipeline, saves the result to ./output. */
 export async function runScriptorium(request: DraftRequest, opts: RunOptions): Promise<RunResult> {
-  getDocType(request.docType); // validate early
-  if (!request.topic?.trim()) throw new Error("A topic is required.");
   const cfg = settings();
-  const emit = opts.onEvent ?? (() => {});
-  const corpus = LocalCorpus.load(request.dataDir ?? cfg.dataDir);
-  for (const ref of opts.references ?? []) if (ref.text?.trim()) corpus.addDocument(ref.name, ref.text, ref.url);
-  const graph = buildGraph({ llm: opts.llm, corpus, passScore: cfg.passScore });
-  const started = Date.now();
-  const id = `${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}-${slugify(request.topic).slice(0, 40)}`;
-
-  emit({ type: "start", request, model: opts.llm.name, localChunks: corpus.size });
-  opts.llm.onNotice = (message) => emit({ type: "trace", event: { at: new Date().toISOString(), agent: "gemini", ms: 0, message } });
-
-  let state: Partial<State> = {};
-  const stream = await graph.stream({ request }, { streamMode: ["updates", "values"], recursionLimit: 200, signal: opts.signal });
-  for await (const chunk of stream as AsyncIterable<[string, any]>) {
-    const [mode, data] = chunk;
-    if (mode === "values") {
-      state = data;
-      continue;
-    }
-    for (const [node, upd] of Object.entries<any>(data ?? {})) {
-      for (const t of upd?.trace ?? []) emit({ type: "trace", event: t });
-      if (node === "planner" && upd.plan) emit({ type: "plan", plan: upd.plan });
-      if (node === "researcher") {
-        for (const f of upd.findings ?? []) {
-          emit({ type: "finding", finding: { id: f.id, question: f.question, sectionId: f.sectionId, ms: f.ms, sources: f.rawSources.length } });
-        }
-      }
-      if (node === "writer") for (const s of Object.values<SectionDraft>(upd.sections ?? {})) emit({ type: "section", section: s });
-      if (node === "assembler") emit({ type: "draft", markdown: upd.document, iteration: upd.draftIteration });
-      if (node === "reviewer" && upd.review) emit({ type: "review", review: upd.review });
-    }
-  }
-
-  const s = state as State;
-  if (!s.document) throw new Error("The pipeline finished without producing a document.");
-
-  const agentMs: Record<string, number> = {};
-  for (const t of s.trace) agentMs[t.agent] = (agentMs[t.agent] ?? 0) + t.ms;
-  const body = s.assembled.map((x) => x.body).join("\n\n");
-  const metrics: RunMetrics = {
-    totalMs: Date.now() - started,
-    agentMs,
-    llmCalls: opts.llm.usage.calls,
-    promptTokens: opts.llm.usage.promptTokens,
-    outputTokens: opts.llm.usage.outputTokens,
-    researchQuestions: s.tasks.length,
-    uniqueSources: s.sources.length,
-    citedReferences: s.references.length,
-    citations: countCitations(body),
-    words: body.split(/\s+/).filter(Boolean).length,
-    revisions: s.iteration,
-    finalScore: s.review?.score ?? null,
-  };
-
-  const result: RunResult = {
-    id,
-    title: s.plan!.title,
-    docType: request.docType,
-    request,
-    plan: s.plan!,
-    markdown: s.document,
-    references: s.references,
-    sources: s.sources,
-    findings: s.findings,
-    reviews: s.reviews,
-    trace: s.trace,
-    usage: { ...opts.llm.usage },
-    metrics,
-  };
-
+  const corpus = loadCorpus(request.dataDir ?? cfg.dataDir);
+  const result = await runPipeline(request, { ...opts, corpus, passScore: cfg.passScore });
   if (opts.save !== false) {
-    const dir = path.join(opts.outputDir ?? cfg.outputDir, id);
+    const dir = path.join(opts.outputDir ?? cfg.outputDir, result.id);
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, "document.md"), result.markdown);
     const { markdown: _m, ...rest } = result;
     fs.writeFileSync(path.join(dir, "run.json"), JSON.stringify({ ...rest, model: opts.llm.name }, null, 2));
     result.outputDir = dir;
   }
-
-  emit({ type: "done", result: { id, title: result.title, docType: result.docType, outputDir: result.outputDir, metrics } });
+  opts.onEvent?.({ type: "done", result: { id: result.id, title: result.title, docType: result.docType, outputDir: result.outputDir, metrics: result.metrics } });
   return result;
 }

@@ -2,7 +2,8 @@ import type { Usage } from "../types.ts";
 import type { GroundedResult, JsonRequest, LLM, TextRequest } from "./types.ts";
 
 /** Overridable for tests / proxies. */
-const apiBase = () => process.env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com/v1beta/models";
+const apiBase = (): string =>
+  (globalThis as any).process?.env?.GEMINI_API_BASE || (globalThis as any).SCRIPTORIUM_API_BASE || "https://generativelanguage.googleapis.com/v1beta/models";
 
 /** Simple counting semaphore so parallel workers don't blow through rate limits. */
 export class Semaphore {

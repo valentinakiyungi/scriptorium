@@ -1,7 +1,7 @@
 {
   "name": "scriptorium",
   "version": "1.0.0",
-  "description": "Autonomous multi-agent research & document drafting system — a LangGraph Supervisor-Worker pipeline powered by Google Gemini.",
+  "description": "Autonomous multi-agent research & document drafting system \u2014 a LangGraph Supervisor-Worker pipeline powered by Google Gemini.",
   "type": "module",
   "bin": {
     "scriptorium": "bin/scriptorium.mjs"
@@ -14,9 +14,20 @@
     "demo": "tsx src/cli.ts web --mock",
     "bench": "tsx src/cli.ts bench",
     "test": "tsx --test test/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:pages": "node scripts/build-pages.mjs",
+    "preview:pages": "npm run build:pages && npx --yes serve dist/pages"
   },
-  "keywords": ["langgraph", "gemini", "multi-agent", "supervisor", "research", "rag", "llm", "document-generation"],
+  "keywords": [
+    "langgraph",
+    "gemini",
+    "multi-agent",
+    "supervisor",
+    "research",
+    "rag",
+    "llm",
+    "document-generation"
+  ],
   "author": "Valentina Kiyungi",
   "license": "MIT",
   "engines": {
@@ -29,6 +40,12 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "esbuild": "^0.28.2"
+  },
+  "homepage": "https://valentinakiyungi.github.io/scriptorium/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/valentinakiyungi/scriptorium.git"
   }
 }

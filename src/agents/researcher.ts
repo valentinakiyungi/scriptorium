@@ -79,7 +79,8 @@ Research question: <question>${task.question}</question>${localBlock}`;
  * (best effort, short timeout) so citations are readable and de-duplicate across researchers.
  */
 export async function resolveRedirects(sources: RawSource[]): Promise<RawSource[]> {
-  if (process.env.SCRIPTORIUM_RESOLVE_URLS === "0") return sources;
+  // Browsers can't read cross-origin redirect targets, so links stay as Google redirect URLs there.
+  if (typeof (globalThis as any).window !== "undefined" || (globalThis as any).process?.env?.SCRIPTORIUM_RESOLVE_URLS === "0") return sources;
   return Promise.all(
     sources.map(async (s) => {
       if (s.kind !== "web" || !/grounding-api-redirect|vertexaisearch\.cloud\.google\.com/.test(s.url)) return s;
