@@ -95,7 +95,7 @@ Every run writes `output/<timestamp>-<slug>/document.md` and a full `run.json` (
 | `-t, --type` | `research-report` | Document type id |
 | `-a, --audience` | per type | Who it's for |
 | `-i, --instructions` | – | Extra guidance |
-| `-q, --max-questions` | `8` | Research questions in the plan |
+| `-q, --max-questions` | `6` | Research questions in the plan |
 | `-r, --max-revisions` | `1` | Reviewer-driven revision rounds |
 | `--no-web` | – | Use only local documents in `./data` |
 | `--data <dir>` | `./data` | Local corpus folder |
@@ -111,6 +111,17 @@ npm run draft -- "anything" --mock
 ```
 
 ---
+
+## Gemini quotas
+
+Free Gemini API keys allow roughly **20 requests per model per day**; a document uses about 12–25 (the web app shows the estimate before you start).
+Scriptorium handles limits for you:
+
+- **Per-minute limits** — it waits as long as Google asks, then retries.
+- **Daily limits** — it never retries a model that is out of quota; it switches to the next model your key can use (each has its own quota) and shows the switch in the Activity log.
+- **Retired models** — it switches to the best available model and saves it to `.env`.
+
+For regular use, enable billing in [Google AI Studio](https://aistudio.google.com/); limits rise immediately and a document typically costs a few cents.
 
 ## Benchmark
 
@@ -128,7 +139,7 @@ Writes `output/benchmark-*.json` with time, words, references, citations, review
 | Variable | Default | |
 |---|---|---|
 | `GEMINI_API_KEY` | – | Required (except `--mock`) |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | Planner, writers, reviewer |
+| `GEMINI_MODEL` | `gemini-3.8-flash` | Planner, writers, reviewer. Auto-switches if Google retires it |
 | `GEMINI_RESEARCH_MODEL` | same | Researchers (e.g. a cheaper Flash-Lite) |
 | `SCRIPTORIUM_CONCURRENCY` | `4` | Max simultaneous Gemini calls — lower if you hit 429s |
 | `SCRIPTORIUM_PASS_SCORE` | `8` | Reviewer score that ends the loop |

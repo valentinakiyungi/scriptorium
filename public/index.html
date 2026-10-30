@@ -134,6 +134,11 @@
   .options { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr) auto auto auto; gap: 10px; align-items: end; padding: 12px 14px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--surface-alt) 55%, var(--surface)); }
   .opt label { display: block; font-size: 0.74rem; font-weight: 700; color: var(--muted); margin: 0 0 4px; text-transform: uppercase; letter-spacing: 0.02em; }
   .opt input[type=text] { width: 100%; min-height: 36px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 0.88rem; }
+  .budget { grid-column: 1 / -1; margin: 0; display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--muted); }
+  .budget svg { width: 15px; height: 15px; }
+  .budget b { color: var(--ink); }
+  .budget.warn { color: var(--warning); }
+  .budget.warn b { color: var(--warning); }
   .stepper { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); height: 36px; }
   .stepper button { width: 30px; height: 100%; border: 0; background: none; color: var(--muted); font-weight: 700; font-size: 1rem; }
   .stepper button:hover { color: var(--blue); }
@@ -228,6 +233,8 @@
   .agent.working .state { color: var(--blue); }
   .agent.done .ico { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
   .agent.done .state { color: var(--success); }
+  .agent.error .ico { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
+  .agent.error .state { color: var(--danger); }
   .meter { padding: 12px 14px; border-top: 1px solid var(--line); }
   .meter-label { display: flex; justify-content: space-between; font-size: 0.84rem; color: var(--muted); margin-bottom: 7px; }
   .meter-label b { color: var(--ink); }
@@ -240,6 +247,7 @@
   .log div:last-child { border-bottom: 0; }
   .log b { font-weight: 700; color: var(--blue-dark); text-transform: capitalize; }
   .log b.supervisor { color: var(--ai); }
+  .log b.gemini { color: var(--warning); }
   .log span { color: var(--muted); word-break: break-word; }
   .log em { font-style: normal; color: var(--faint); }
   .muted-note { margin: 0; padding: 18px 14px; color: var(--muted); font-size: 0.86rem; text-align: center; }
@@ -392,9 +400,10 @@
       <div class="options">
         <div class="opt"><label for="audience">Audience</label><input type="text" id="audience" /></div>
         <div class="opt wide"><label for="instructions">Instructions</label><input type="text" id="instructions" placeholder="Tone, focus, things to include or avoid" /></div>
-        <div class="opt"><label>Questions</label><div class="stepper" data-key="maxQuestions" data-min="1" data-max="20"><button type="button" aria-label="Fewer questions">−</button><output>8</output><button type="button" aria-label="More questions">+</button></div></div>
+        <div class="opt"><label>Questions</label><div class="stepper" data-key="maxQuestions" data-min="1" data-max="20"><button type="button" aria-label="Fewer questions">−</button><output>6</output><button type="button" aria-label="More questions">+</button></div></div>
         <div class="opt"><label>Revisions</label><div class="stepper" data-key="maxRevisions" data-min="0" data-max="3"><button type="button" aria-label="Fewer revisions">−</button><output>1</output><button type="button" aria-label="More revisions">+</button></div></div>
         <div class="opt"><label>Research</label><label class="switch" title="Search the live web with Google Search grounding"><input type="checkbox" id="web" checked />Live web</label></div>
+        <p class="budget" id="budget"></p>
       </div>
 
       <div class="doc-bar">
@@ -447,12 +456,14 @@
   <div class="modal-card">
     <div class="modal-header"><h2 id="settingsTitle">Settings</h2><button class="tool" data-close aria-label="Close"></button></div>
     <p class="hint">Scriptorium uses Google Gemini. Create a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>. It is saved to the <code>.env</code> file on this computer and never leaves it except in requests to Google.</p>
+    <p class="hint"><b>Free keys</b> allow about 20 requests per model per day; one document uses roughly 12–25. Scriptorium moves to another model when one runs out. For heavier use, <a href="https://aistudio.google.com/" target="_blank" rel="noopener">enable billing in AI Studio</a> — limits rise immediately and a document typically costs a few cents.</p>
     <label class="field">Gemini API key<input type="password" id="sKey" autocomplete="off" placeholder="Paste your key" /><small id="sKeyHint"></small></label>
     <div class="two">
       <label class="field">Model<input type="text" id="sModel" list="models" /></label>
       <label class="field">Research model <input type="text" id="sResearch" list="models" placeholder="Same as model" /></label>
     </div>
-    <datalist id="models"><option value="gemini-2.5-flash"><option value="gemini-2.5-pro"><option value="gemini-2.5-flash-lite"><option value="gemini-flash-latest"></datalist>
+    <datalist id="models"><option value="gemini-3.8-flash"><option value="gemini-flash-latest"><option value="gemini-3.5-flash-lite"></datalist>
+    <p class="hint" id="sModelHint" style="margin-top:-6px"></p>
     <div class="two">
       <label class="field">Pass score (1–10)<input type="number" id="sPass" min="1" max="10" /><small>Reviewer score that ends revisions.</small></label>
       <label class="field">Parallel calls<input type="number" id="sConc" min="1" max="16" /><small>Lower this if you hit rate limits.</small></label>
@@ -626,7 +637,7 @@ const S = {
   references: [], running: false, runId: null, es: null,
   markdown: "", refs: [], sources: [], plan: null, findings: [], reviews: [], metrics: null, title: "",
   agentState: {}, agentCount: {}, stage: -1, logCount: 0, error: "",
-  opts: Object.assign({ maxQuestions: 8, maxRevisions: 1 }, store.get("opts", {})),
+  opts: Object.assign({ maxQuestions: 6, maxRevisions: 1 }, store.get("opts", {})),
 };
 
 // ── Theme ────────────────────────────────────────────────────────────────────
@@ -656,6 +667,7 @@ function renderTypes() {
   if (!t) return;
   $("typeDesc").innerHTML = `${esc(t.description)} <b>${t.sections.length} sections</b> · ~${t.targetWords.toLocaleString()} words · ${esc(t.sections.join(" · "))}`;
   $("audience").placeholder = t.defaultAudience;
+  renderBudget();
   $("suggestions").innerHTML = t.examples.map((e) => `<button class="suggestion" type="button" data-ex="${esc(e)}">${esc(e)}</button>`).join("");
 }
 $("types").onclick = (e) => { const b = e.target.closest("[data-type]"); if (!b || S.running) return; S.docType = b.dataset.type; store.set("docType", S.docType); renderTypes(); };
@@ -676,9 +688,24 @@ document.querySelectorAll(".stepper").forEach((st) => {
   const key = st.dataset.key, min = +st.dataset.min, max = +st.dataset.max, out = st.querySelector("output");
   out.textContent = S.opts[key];
   const [dec, inc] = st.querySelectorAll("button");
-  dec.onclick = () => { S.opts[key] = Math.max(min, S.opts[key] - 1); out.textContent = S.opts[key]; saveForm(); };
-  inc.onclick = () => { S.opts[key] = Math.min(max, S.opts[key] + 1); out.textContent = S.opts[key]; saveForm(); };
+  dec.onclick = () => { S.opts[key] = Math.max(min, S.opts[key] - 1); out.textContent = S.opts[key]; saveForm(); renderBudget(); };
+  inc.onclick = () => { S.opts[key] = Math.min(max, S.opts[key] + 1); out.textContent = S.opts[key]; saveForm(); renderBudget(); };
 });
+
+// ── Request budget (free Gemini keys allow ~20 requests per model per day) ─────
+function estimate() {
+  const t = S.config?.docTypes.find((x) => x.id === S.docType); if (!t) return 0;
+  const sections = t.sections.length;
+  const questions = Math.max(Math.min(S.opts.maxQuestions, t.researchSections * 3), Math.min(S.opts.maxQuestions, t.researchSections));
+  const revision = 2 + Math.ceil(sections / 2) + 1; // gap research + rewrites + review
+  return 1 + questions + sections + 1 + S.opts.maxRevisions * revision;
+}
+function renderBudget() {
+  const n = estimate(); if (!n) return;
+  const big = n > 20;
+  $("budget").className = "budget" + (big ? " warn" : "");
+  $("budget").innerHTML = `${icon(big ? "alert" : "gauge")}<span>About <b>${n} Gemini requests</b> per run.${big ? " Free keys allow ~20 per model per day — Scriptorium moves to another model when one runs out, or lower Questions/Revisions." : " Fits a free key's daily allowance."}</span>`;
+}
 
 // ── Reference sources ────────────────────────────────────────────────────────
 function renderRefs() {
@@ -723,7 +750,7 @@ $("urlInput").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.pr
 function renderAgents() {
   $("agents").innerHTML = AGENTS.map(([a, d]) => {
     const st = S.agentState[a] || "idle", n = S.agentCount[a] || 0;
-    const label = st === "working" ? `${icon("loader", "spin")}Working` : st === "done" ? `${icon("check")}${n > 1 ? `×${n}` : "Done"}` : "Waiting";
+    const label = st === "error" ? `${icon("alert")}Failed` : st === "working" ? `${icon("loader", "spin")}Working` : st === "done" ? `${icon("check")}${n > 1 ? `×${n}` : "Done"}` : "Waiting";
     return `<li class="agent ${st}"><span class="ico">${icon(a)}</span><span><div class="name">${a}${n > 1 && (a === "researcher" || a === "writer") ? "s" : ""}</div><div class="desc">${d}</div></span><span class="state">${label}</span></li>`;
   }).join("");
   const idx = S.stage, total = STAGES.length - 1;
@@ -887,7 +914,7 @@ async function start() {
   };
   es.onerror = () => { if (es.readyState === 2 && S.running && !S.metrics) { S.error = S.error || "Lost connection to the server."; finish(); } };
 }
-function finish() { for (const k in S.agentState) if (S.agentState[k] === "working") S.agentState[k] = "done"; setRunning(false); renderAll(); }
+function finish() { for (const k in S.agentState) if (S.agentState[k] === "working") S.agentState[k] = S.error && k !== "supervisor" ? "error" : "done"; setRunning(false); renderAll(); }
 async function stop() { if (S.runId) await fetch(`/api/runs/${S.runId}/cancel`, { method: "POST" }).catch(() => {}); }
 $("go").onclick = start;
 
@@ -907,10 +934,29 @@ async function openSettings() {
     $("sModel").value = s.model; $("sResearch").value = s.researchModel; $("sPass").value = s.passScore; $("sConc").value = s.concurrency;
   } catch {}
   openModal("settingsModal");
+  loadModels();
 }
+// Fill the model picker with the models this key can actually use.
+async function loadModels() {
+  $("sModelHint").textContent = "";
+  try {
+    const r = await (await fetch("/api/models", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ apiKey: $("sKey").value }) })).json();
+    if (!r.models?.length) { if (r.error) $("sModelHint").textContent = `Couldn't list models: ${r.error}`; return; }
+    $("models").innerHTML = r.models.map((m) => `<option value="${esc(m.id)}">${esc(m.displayName)}</option>`).join("");
+    const ids = r.models.map((m) => m.id);
+    const cur = $("sModel").value.trim();
+    if (cur && !ids.includes(cur) && r.recommended) {
+      $("sModelHint").innerHTML = `${icon("alert")} <b>${esc(cur)}</b> isn't available to your key. <button class="link-btn" type="button" id="useRec" style="margin:0">Use ${esc(r.recommended)}</button>`;
+      $("useRec").onclick = () => { $("sModel").value = r.recommended; loadModels(); };
+    } else $("sModelHint").textContent = `${ids.length} models available to your key${r.recommended ? ` · recommended: ${r.recommended}` : ""}.`;
+  } catch {}
+}
+$("sKey").addEventListener("change", loadModels);
+$("sModel").addEventListener("change", loadModels);
 $("sTest").onclick = async () => {
   $("sResult").className = "test-result"; $("sResult").innerHTML = `${icon("loader", "spin")}Testing…`;
   const r = await (await fetch("/api/settings/test", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ apiKey: $("sKey").value, model: $("sModel").value }) })).json();
+  if (r.suggest) { $("sModel").value = r.suggest; loadModels(); }
   $("sResult").className = "test-result " + (r.ok ? "ok" : "bad");
   $("sResult").innerHTML = `${icon(r.ok ? "check" : "alert")}${esc(r.message)}`;
 };

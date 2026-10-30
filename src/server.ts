@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { loadEnv, saveEnv, settings } from "./config.ts";
 import { DOC_TYPES } from "./doctypes.ts";
 import { createLLM } from "./llm/index.ts";
+import { listModels, rankModels } from "./llm/gemini.ts";
 import { defaultRequest, runScriptorium, type ReferenceDoc, type RunEvent, type RunResult } from "./run.ts";
 
 const PUBLIC = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "public");
@@ -65,6 +66,7 @@ export async function startServer(opts: { port: number; mock?: boolean; host?: s
             examples: d.examples,
             targetWords: d.targetWords,
             sections: d.sections.map((s) => s.heading),
+            researchSections: d.sections.filter((s) => s.research).length,
           })),
           model: opts.mock ? "mock" : cfg.model,
           mock: !!opts.mock,
@@ -97,18 +99,38 @@ export async function startServer(opts: { port: number; mock?: boolean; host?: s
         return json(res, 200, { ok: true });
       }
 
+      if (req.method === "POST" && p === "/api/models") {
+        const b = await readBody(req);
+        const key = (typeof b.apiKey === "string" && b.apiKey.trim()) || settings().apiKey;
+        if (!key) return json(res, 200, { models: [] });
+        try {
+          const all = await listModels(key);
+          const order = rankModels(all.map((m) => m.id));
+          const byId = new Map(all.map((m) => [m.id, m]));
+          return json(res, 200, { models: order.map((id) => byId.get(id)), recommended: order[0] ?? null });
+        } catch (e: any) {
+          return json(res, 200, { models: [], error: e?.message ?? String(e) });
+        }
+      }
+
       if (req.method === "POST" && p === "/api/settings/test") {
         const b = await readBody(req);
         const key = (typeof b.apiKey === "string" && b.apiKey.trim()) || settings().apiKey;
         const model = (typeof b.model === "string" && b.model) || settings().model;
         if (!key) return json(res, 200, { ok: false, message: "No API key entered." });
         try {
-          const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}`, {
+          const r = await fetch(`${process.env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com/v1beta/models"}/${encodeURIComponent(model)}`, {
             headers: { "x-goog-api-key": key },
             signal: AbortSignal.timeout(10_000),
           });
           const d: any = await r.json().catch(() => ({}));
-          return json(res, 200, r.ok ? { ok: true, message: `Connected — ${d.displayName ?? model} is available.` } : { ok: false, message: d?.error?.message ?? `HTTP ${r.status}` });
+          if (r.ok) return json(res, 200, { ok: true, message: `Connected — ${d.displayName ?? model} is available.` });
+          if (r.status === 404 || r.status === 400) {
+            // Key may be fine but the model is retired: suggest the best one the key can use.
+            const best = await listModels(key).then((m) => rankModels(m.map((x) => x.id))[0]).catch(() => undefined);
+            if (best) return json(res, 200, { ok: false, suggest: best, message: `Your key works, but "${model}" isn't available to it. Use ${best} instead.` });
+          }
+          return json(res, 200, { ok: false, message: d?.error?.message ?? `HTTP ${r.status}` });
         } catch (e: any) {
           return json(res, 200, { ok: false, message: `Could not reach Gemini: ${e?.message ?? e}` });
         }
@@ -156,7 +178,7 @@ export async function startServer(opts: { port: number; mock?: boolean; host?: s
           docType: body.docType,
           audience: body.audience?.slice(0, 200) || undefined,
           instructions: body.instructions?.slice(0, 2000) || undefined,
-          maxQuestions: clamp(Number(body.maxQuestions) || 8, 1, 20),
+          maxQuestions: clamp(Number(body.maxQuestions) || 6, 1, 20),
           maxRevisions: clamp(Number(body.maxRevisions ?? 1), 0, 3),
           web: body.web !== false,
         });
@@ -243,9 +265,29 @@ export async function startServer(opts: { port: number; mock?: boolean; host?: s
 
   // Bound to localhost by default: the settings endpoint can write your API key.
   const host = opts.host ?? process.env.HOST ?? "127.0.0.1";
-  await new Promise<void>((r) => server.listen(opts.port, host, r));
+  // If the port is taken (e.g. Scriptorium is already running in another terminal), try the next ones.
+  let port = opts.port;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(port, host, () => {
+          server.off("error", reject);
+          resolve();
+        });
+      });
+      break;
+    } catch (e: any) {
+      if (e?.code !== "EADDRINUSE" || attempt >= 9) {
+        if (e?.code === "EADDRINUSE") throw new Error(`Ports ${opts.port}-${port} are all in use. Stop the other server (lsof -ti :${opts.port} | xargs kill) or pass --port.`);
+        throw e;
+      }
+      if (attempt === 0) console.log(`Port ${port} is already in use (is Scriptorium already running?) — trying ${port + 1}…`);
+      port++;
+    }
+  }
   const addr = server.address();
-  const port = typeof addr === "object" && addr ? addr.port : opts.port;
+  if (typeof addr === "object" && addr) port = addr.port;
   console.log(`\n✒  Scriptorium is running at http://localhost:${port}${opts.mock ? "  (mock mode)" : ""}\n`);
   return server;
 }

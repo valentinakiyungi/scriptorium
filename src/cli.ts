@@ -20,7 +20,7 @@ Draft options
   -t, --type <id>            Document type (default: research-report)
   -a, --audience <text>      Who the document is for
   -i, --instructions <text>  Extra guidance (tone, focus, constraints)
-  -q, --max-questions <n>    Research questions in the initial plan (default: 8)
+  -q, --max-questions <n>    Research questions in the initial plan (default: 6)
   -r, --max-revisions <n>    Reviewer-driven revision rounds (default: 1)
       --no-web               Skip Google Search; use local documents in ./data only
       --data <dir>           Folder of .md/.txt files to include as sources
@@ -91,7 +91,7 @@ async function main() {
     docType: values.type ?? "research-report",
     audience: values.audience,
     instructions: values.instructions,
-    maxQuestions: values["max-questions"] ? Number(values["max-questions"]) : 8,
+    maxQuestions: values["max-questions"] ? Number(values["max-questions"]) : 6,
     maxRevisions: values["max-revisions"] ? Number(values["max-revisions"]) : 1,
     web: !values["no-web"],
     dataDir: values.data,

@@ -79,7 +79,7 @@ export function defaultRequest(partial: Partial<DraftRequest> & { topic: string 
   return {
     docType: "research-report",
     maxRevisions: 1,
-    maxQuestions: 8,
+    maxQuestions: 6,
     web: true,
     ...partial,
   };
@@ -98,6 +98,7 @@ export async function runScriptorium(request: DraftRequest, opts: RunOptions): P
   const id = `${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}-${slugify(request.topic).slice(0, 40)}`;
 
   emit({ type: "start", request, model: opts.llm.name, localChunks: corpus.size });
+  opts.llm.onNotice = (message) => emit({ type: "trace", event: { at: new Date().toISOString(), agent: "gemini", ms: 0, message } });
 
   let state: Partial<State> = {};
   const stream = await graph.stream({ request }, { streamMode: ["updates", "values"], recursionLimit: 200, signal: opts.signal });

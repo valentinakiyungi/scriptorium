@@ -34,6 +34,9 @@ export function saveEnv(updates: Record<string, string>, file = path.join(proces
   for (const [k, v] of Object.entries(updates)) process.env[k] = v;
 }
 
+/** Default Gemini model. If Google retires it, Scriptorium switches to the best available model automatically. */
+export const DEFAULT_MODEL = "gemini-3.8-flash";
+
 export interface Settings {
   apiKey?: string;
   model: string;
@@ -46,7 +49,7 @@ export interface Settings {
 }
 
 export function settings(): Settings {
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
   return {
     apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY,
     model,

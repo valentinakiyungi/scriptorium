@@ -38,6 +38,8 @@ export interface GroundedResult {
 export interface LLM {
   readonly name: string;
   readonly usage: Usage;
+  /** Optional live status messages (rate-limit waits, model switches) surfaced in the UI. */
+  onNotice?: (message: string) => void;
   text(req: TextRequest): Promise<string>;
   json<T>(req: JsonRequest): Promise<T>;
   /** Text generation with live Google Search grounding. */
