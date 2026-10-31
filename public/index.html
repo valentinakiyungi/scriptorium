@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#6366f1" />
 <title>Scriptorium</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%236366f1'/%3E%3Cstop offset='1' stop-color='%230ea5e9'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='48' height='48' rx='12' fill='url(%23g)'/%3E%3Cg transform='translate(10 10) scale(1.17)' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12.67 19a2 2 0 0 0 1.416-.588l6.154-6.172a6 6 0 0 0-8.49-8.49L5.586 9.914A2 2 0 0 0 5 11.328V18a1 1 0 0 0 1 1z'/%3E%3Cpath d='M16 8 2 22'/%3E%3Cpath d='M17.5 15H9'/%3E%3C/g%3E%3C/svg%3E" />
@@ -92,7 +92,7 @@
   /* AI prompt box */
   .assist { margin: 0; padding: 14px; background: var(--ai-bg); border-bottom: 1px solid var(--ai-line); }
   .assist-row { display: flex; align-items: flex-start; gap: 8px; }
-  .assist-icon { color: var(--ai); margin-top: 11px; }
+  .assist-icon { color: var(--ai); margin-top: 12px; }
   .running .assist-icon { animation: pulse 1.4s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: .3; } }
   .assist textarea { flex: 1 1 auto; min-height: 42px; max-height: 220px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); line-height: 1.45; resize: none; overflow-y: hidden; }
@@ -302,30 +302,106 @@
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
   .toast svg { color: #34d399; }
 
-  @media (max-width: 1060px) {
+
+  /* ── Responsive (modelled on Polypost: one column ≤1080px, compact chips, phone layout ≤640px) ── */
+  .subtitle .short, .key-msg .short, .btn-short { display: none; }
+  .dock { display: none; }
+  .type-desc .secs { }
+  @media (max-width: 1080px) {
+    .app-shell { width: min(760px, calc(100% - 24px)); padding-top: 18px; }
     .workspace { grid-template-columns: 1fr; }
     .rail { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items: start; }
+    .type-chips { flex-wrap: nowrap; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none; padding: 2px 2px 4px; margin: 0 -2px; -webkit-mask-image: linear-gradient(90deg, #000 92%, transparent); mask-image: linear-gradient(90deg, #000 92%, transparent); }
+    .type-chips::-webkit-scrollbar { display: none; }
+    .chip { --pad: 12px; flex: 0 0 auto; min-height: 36px; font-size: 0.82rem; white-space: nowrap; scroll-snap-align: start; }
+    .chip:last-child { margin-right: 28px; }
+    /* Floating progress dock: the agent cards sit below the document on narrow screens. */
+    .dock { position: fixed; z-index: 40; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 8px; padding: 10px 10px 10px 14px; border: 1px solid var(--line); border-radius: 14px; background: color-mix(in srgb, var(--surface) 92%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: 0 16px 40px rgba(15, 23, 42, 0.22); max-width: 736px; margin: 0 auto; }
+    .dock[hidden] { display: none !important; }
+    .dock-info { flex: 1; min-width: 0; }
+    .dock-label { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; margin-bottom: 6px; }
+    .dock-label b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+    .dock-label span:last-child { color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
+    .dock-label svg { width: 16px; height: 16px; color: var(--blue); }
+    .dock .track { height: 6px; }
+    .dock-btn { min-height: 40px !important; padding: 0 12px !important; font-size: 0.85rem; }
+    body.has-dock { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+    body.has-dock .toast { bottom: calc(96px + env(safe-area-inset-bottom)); }
   }
-  @media (max-width: 760px) {
-    .options { grid-template-columns: 1fr 1fr; }
-    .options .opt.wide { grid-column: 1 / -1; }
+  @media (max-width: 820px) {
+    .options { grid-template-columns: auto auto 1fr; }
+    .options .opt:nth-child(1), .options .opt:nth-child(2) { grid-column: 1 / -1; }
+    .options .opt:nth-child(5) { justify-self: end; }
   }
   @media (max-width: 640px) {
-    .app-shell { width: calc(100% - 32px); padding-top: 18px; }
-    .app-header { flex-wrap: wrap; gap: 12px; }
-    .brand { width: 46px; height: 46px; flex-basis: 46px; }
-    h1 { font-size: 2rem; }
-    .header-copy { flex-basis: calc(100% - 60px); }
-    .subtitle { font-size: 0.95rem; }
-    .header-actions { width: 100%; }
+    .app-shell { width: calc(100% - 24px); padding: calc(12px + env(safe-area-inset-top)) 0 32px; }
+    .app-header { flex-wrap: wrap; gap: 4px 12px; padding-bottom: 14px; }
+    .brand { width: 44px; height: 44px; flex-basis: 44px; border-radius: 12px; }
+    .header-copy { flex: 1 1 calc(100% - 56px); }
+    h1 { font-size: 1.85rem; }
+    .subtitle { font-size: 0.95rem; margin-top: 4px; }
+    .subtitle .long, .key-msg .long, .btn-long { display: none; }
+    .key-msg .short, .btn-short { display: inline; }
+    .subtitle .short { display: inline; }
+    .header-actions { order: 3; margin-left: 56px; }
+    .icon-btn { width: 40px; height: 40px; }
+    .type-desc { font-size: 0.84rem; margin: 8px 2px 14px; }
+    .type-desc .secs { display: none; }
+    .assist { padding: 12px; }
     .assist-row { flex-wrap: wrap; }
-    .assist textarea { flex-basis: calc(100% - 26px); }
-    .assist .primary { margin-left: 26px; flex: 1; }
+    .assist-icon { display: none; }
+    .assist textarea { flex-basis: 100%; }
+    .assist .primary { flex: 1 1 100%; min-height: 46px; margin-left: 0; }
     .suggestions, details.sources, .key-needed { margin-left: 0; }
-    .doc-actions { margin-left: 0; }
-    .doc-frame { min-height: 360px; }
+    .suggestions { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+    .suggestions::-webkit-scrollbar { display: none; }
+    .suggestion { flex: 0 0 auto; min-height: 36px; padding: 0 13px; white-space: nowrap; }
+    .key-needed { align-items: center; }
+    .key-needed .link-btn { min-height: 36px; }
+    details.sources summary { min-height: 44px; }
+    .src-buttons .ghost { flex: 1 1 auto; justify-content: center; min-height: 44px; }
+    .inline-input:not(.col) { flex-wrap: wrap; }
+    .inline-input:not(.col) input { flex-basis: 100%; }
+    .inline-input:not(.col) .primary { flex: 1; }
+    .ref { padding: 10px 12px; }
+    .ref button { width: 36px; height: 36px; justify-content: center; align-items: center; }
+    .options { padding: 12px; gap: 12px 10px; }
+    .stepper { height: 44px; }
+    .stepper button { width: 42px; }
+    .switch { height: 44px; }
+    .doc-bar { padding: 8px 10px; gap: 8px; }
+    .segmented button { min-height: 36px; padding: 0 12px; }
+    .doc-actions { margin-left: auto; gap: 2px; }
+    .tool { width: 40px; height: 40px; }
+    .doc-frame { padding: 22px 16px 28px; min-height: 0; }
+    .empty { min-height: 300px; }
+    .flow { gap: 4px; }
+    .doc { font-size: 1rem; line-height: 1.65; }
+    .doc h2 { font-size: 1.18rem; }
+    .doc-foot { padding: 10px 14px; gap: 4px 14px; font-size: 0.8rem; }
+    .rail { grid-template-columns: 1fr; }
+    .agent { padding: 8px 0; }
+    .hist button { min-height: 48px; }
     .two { grid-template-columns: 1fr; }
+    /* Dialogs become bottom sheets */
+    .modal { align-items: flex-end; padding: 0; }
+    .modal-card, .modal-card.wide { width: 100%; max-height: 92dvh; border-radius: 18px 18px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); }
+    .modal-card::before { content: ""; display: block; width: 40px; height: 4px; margin: -6px auto 2px; border-radius: 4px; background: var(--line); }
+    .modal-actions { position: sticky; bottom: calc(-18px - env(safe-area-inset-bottom)); margin: 0 -16px calc(-18px - env(safe-area-inset-bottom)); padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--line); }
+    .modal-actions .left { margin-right: 0; }
+    .modal-actions .ghost, .modal-actions .primary { flex: 1 1 0; min-height: 44px; justify-content: center; padding: 0 10px; }
+    .modal-actions .test-result { order: -1; flex: 1 1 100%; }
+    .modal-actions .test-result:empty { display: none; }
+    .modal .tool[data-close] { width: 40px; height: 40px; }
   }
+  /* Touch devices: 16px fields stop iOS from zooming in on focus; larger hit areas. */
+  @media (pointer: coarse) {
+    input, textarea, select { font-size: 16px !important; }
+    .tool { min-width: 40px; min-height: 40px; }
+    .suggestion { min-height: 34px; }
+    .segmented button { min-height: 34px; }
+  }
+  .modal-card { max-height: calc(100dvh - 40px); }
   @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
   @media print {
     body { background: #fff; }
@@ -350,7 +426,7 @@
     </svg>
     <div class="header-copy">
       <h1>Scriptorium</h1>
-      <p class="subtitle">Commission a document once. A team of AI agents researches the live web, drafts every section in parallel and fact-checks itself — returning a structured, cited draft.</p>
+      <p class="subtitle">Commission a document once.<span class="long"> A team of AI agents researches the live web, drafts every section in parallel and fact-checks itself — returning a structured, cited draft.</span><span class="short"> AI agents research, draft and fact-check it for you.</span></p>
     </div>
     <div class="header-actions">
       <button class="icon-btn" id="helpBtn" title="How it works" aria-label="How it works"></button>
@@ -373,7 +449,7 @@
         </div>
         <div class="key-needed" id="keyNeeded" hidden>
           <span data-icon="key"></span>
-          <span id="keyMsg">Connect a Gemini API key to start drafting.</span>
+          <span id="keyMsg" class="key-msg">Connect a Gemini API key to start drafting.</span>
           <button class="link-btn" id="keyLink">Add key <span data-icon="arrow"></span></button>
         </div>
         <div class="suggestions" id="suggestions"></div>
@@ -471,7 +547,7 @@
       <label class="field">Parallel calls<input type="number" id="sConc" min="1" max="16" /><small>Lower this if you hit rate limits.</small></label>
     </div>
     <div class="modal-actions">
-      <button class="ghost left" id="sTest" type="button"><span data-icon="plug"></span>Test connection</button>
+      <button class="ghost left" id="sTest" type="button"><span data-icon="plug"></span><span class="btn-long">Test connection</span><span class="btn-short">Test</span></button>
       <p class="test-result" id="sResult"></p>
       <button class="ghost" data-close type="button">Cancel</button>
       <button class="primary" id="sSave" type="button">Save</button>
@@ -506,6 +582,15 @@
     <h3>Command line</h3>
     <ul><li><code>npm run draft -- "your topic" --type policy-memo</code></li><li><code>npm run bench</code> — benchmark all document types</li></ul>
   </div>
+</div>
+
+<div class="dock" id="dock" aria-live="polite" hidden>
+  <div class="dock-info">
+    <div class="dock-label"><span id="dockIcon"></span><b id="dockLabel">Working…</b><span id="dockPct">0%</span></div>
+    <div class="track"><div id="dockBar" style="width:0%"></div></div>
+  </div>
+  <button class="ghost dock-btn" id="dockView" type="button">Agents</button>
+  <button class="primary stop dock-btn" id="dockStop" type="button">Stop</button>
 </div>
 
 <div class="toast" id="toast" role="status"><span data-icon="check"></span><span id="toastText"></span></div>
@@ -557,7 +642,7 @@ const I = {
   reviewer: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
 };
 const icon = (n, cls = "") => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${I[n] || ""}</svg>`;
-const hydrateIcons = (root = document) => root.querySelectorAll("[data-icon]").forEach((el) => { el.outerHTML = icon(el.dataset.icon); });
+const hydrateIcons = (root = document) => root.querySelectorAll("[data-icon]").forEach((el) => { el.outerHTML = icon(el.dataset.icon, el.className); });
 
 const TYPE_ICON = { "research-report": "report", "literature-review": "book", "executive-brief": "briefcase", "policy-memo": "landmark", "technical-whitepaper": "cpu", "blog-article": "pen", "grant-proposal": "award" };
 const AGENTS = [
@@ -705,7 +790,7 @@ function renderTypes() {
   $("types").innerHTML = types.map((t) => `<button class="chip ${t.id === S.docType ? "on" : ""}" data-type="${t.id}" aria-pressed="${t.id === S.docType}" ${S.running ? "disabled" : ""}>${icon(TYPE_ICON[t.id] || "file")}${esc(t.label)}</button>`).join("");
   const t = types.find((x) => x.id === S.docType);
   if (!t) return;
-  $("typeDesc").innerHTML = `${esc(t.description)} <b>${t.sections.length} sections</b> · ~${t.targetWords.toLocaleString()} words · ${esc(t.sections.join(" · "))}`;
+  $("typeDesc").innerHTML = `${esc(t.description)} <b>${t.sections.length} sections</b> · ~${t.targetWords.toLocaleString()} words<span class="secs"> · ${esc(t.sections.join(" · "))}</span>`;
   $("audience").placeholder = t.defaultAudience;
   renderBudget();
   $("suggestions").innerHTML = t.examples.map((e) => `<button class="suggestion" type="button" data-ex="${esc(e)}">${esc(e)}</button>`).join("");
@@ -797,8 +882,31 @@ function renderAgents() {
   $("stageLabel").textContent = S.error ? "Stopped" : idx < 0 ? "Waiting for a topic" : STAGES[Math.min(idx, total)][1] + (S.running && idx < total ? "…" : "");
   $("stagePct").textContent = pct + "%";
   $("stageBar").style.width = pct + "%";
+  renderDock(pct);
   $("runBadge").innerHTML = S.running ? `<span class="badge">${icon("loader", "spin")}Running</span>` : S.error ? `<span class="badge err">Stopped</span>` : S.metrics ? `<span class="badge ok">${icon("check")}Done</span>` : `<span class="badge idle">Idle</span>`;
 }
+// Floating progress dock for narrow screens (the agent cards are below the document there).
+let dockTimer;
+function renderDock(pct) {
+  const narrow = matchMedia("(max-width: 1080px)").matches;
+  const show = narrow && (S.running || S.dockDone);
+  $("dock").hidden = !show;
+  document.body.classList.toggle("has-dock", show);
+  if (!show) return;
+  $("dockIcon").innerHTML = S.running ? icon("loader", "spin") : S.error ? icon("alert") : icon("check");
+  $("dockLabel").textContent = S.running ? $("stageLabel").textContent : S.error ? "Run stopped" : "Document ready";
+  $("dockPct").textContent = pct + "%";
+  $("dockBar").style.width = pct + "%";
+  $("dockStop").hidden = !S.running;
+  $("dockView").textContent = S.running ? "Agents" : "Read";
+}
+$("dockView").onclick = () => {
+  const target = S.running ? $("agents").closest(".panel") : $("frame");
+  target.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (!S.running) { S.dockDone = false; renderAgents(); }
+};
+$("dockStop").onclick = () => stop();
+addEventListener("resize", () => renderAgents());
 function setWorking(agent) {
   for (const k of Object.keys(S.agentState)) if (S.agentState[k] === "working") S.agentState[k] = "done";
   if (agent) { S.agentState[agent] = "working"; const si = STAGES.findIndex(([s]) => s === agent); if (si > S.stage || (si >= 0 && agent !== "reviewer" && si < S.stage)) S.stage = si; }
@@ -943,10 +1051,13 @@ function onRunEvent(ev) {
     const full = ev.result;
     Object.assign(S, { markdown: full.markdown, refs: full.references, sources: full.sources, findings: full.findings, plan: full.plan, metrics: full.metrics, title: full.title, stage: STAGES.length - 1 });
     AGENTS.forEach(([a]) => { if (S.agentState[a]) S.agentState[a] = "done"; });
-    finish(); toast("Document ready"); renderHistory();
+    finish(); if ($("dock").hidden) toast("Document ready"); renderHistory();
   }
 }
-function finish() { for (const k in S.agentState) if (S.agentState[k] === "working") S.agentState[k] = S.error && k !== "supervisor" ? "error" : "done"; setRunning(false); renderAll(); }
+function finish() {
+  S.dockDone = true; clearTimeout(dockTimer);
+  dockTimer = setTimeout(() => { S.dockDone = false; renderAgents(); }, 8000);
+  for (const k in S.agentState) if (S.agentState[k] === "working") S.agentState[k] = S.error && k !== "supervisor" ? "error" : "done"; setRunning(false); renderAll(); }
 async function stop() { if (S.runId) await api.cancel(S.runId); }
 $("go").onclick = start;
 
@@ -1006,14 +1117,15 @@ async function loadConfig() {
     S.config = await api.config();
     const needKey = STATIC ? !S.config.hasKey : !S.config.ready;
     $("keyNeeded").hidden = !needKey;
-    $("keyMsg").textContent = STATIC
-      ? "Demo mode — simulated agents and placeholder sources. Add your free Gemini API key for real, cited research; it stays in this browser."
+    $("keyMsg").innerHTML = STATIC
+      ? `<span class="long">Demo mode — simulated agents and placeholder sources. Add your free Gemini API key for real, cited research; it stays in this browser.</span><span class="short">Demo mode with simulated output. Add a free Gemini key for real research.</span>`
       : "Connect a Gemini API key to start drafting.";
     $("settingsBtn").classList.toggle("has-dot", needKey);
     $("settingsBtn").title = needKey ? "Settings · API key needed" : `Settings · ${S.config.model}`;
   } catch { S.config = { docTypes: [], ready: false }; S.error = "Can't reach the Scriptorium server. Is it still running?"; }
   setRunning(S.running); renderTypes(); renderAll();
 }
+if (matchMedia("(pointer: coarse)").matches) $("topic").placeholder = "What should Scriptorium research and write about?";
 if (STATIC) {
   $("keyPrivacy").innerHTML = `Scriptorium runs entirely in your browser and uses Google Gemini. Create a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>. Your key is stored only in this browser and is sent only to Google — there is no Scriptorium server.`;
   if (window.SCRIPTORIUM_REPO) {

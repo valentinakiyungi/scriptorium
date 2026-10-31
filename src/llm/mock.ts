@@ -70,7 +70,7 @@ export class MockLLM implements LLM {
       const c = (i: number) => (ids.length ? `[${ids[i % ids.length]}]` : "");
       out =
         `*Demo output${revised ? " (revised after review)" : ""} — with a Gemini API key, the writer agent drafts this section from live, cited web research.*\n\n` +
-        `In a live run, the **${heading}** section would ${goal ? goal.charAt(0).toLowerCase() + goal.slice(1) : "cover this part of the topic"}. ` +
+        `In a live run, the **${heading}** section covers: ${goal ? goal.charAt(0).toLowerCase() + goal.slice(1) : "this part of the topic"}. ` +
         `The writer receives the researchers' evidence for it and cites every claim inline ${c(0)}, drawing on several independent sources ${c(1)}.\n\n` +
         (questions.length ? `Questions the researchers answered for this document include:\n\n${questions.map((q, i) => `- ${q} ${c(i + 2)}`).join("\n")}\n\n` : "") +
         `After drafting, the assembler validates and renumbers these citations, and the reviewer scores the section against the ` +
