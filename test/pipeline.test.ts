@@ -19,7 +19,7 @@ test("full Supervisor-Worker run produces a cited document and revises once", as
     onEvent: (e) => events.push(e),
   });
 
-  assert.match(r.markdown, /^# Urban Heat Islands/);
+  assert.match(r.markdown, /^# Urban heat islands/);
   for (const h of ["Summary", "Problem Statement", "Policy Options", "References"]) assert.ok(r.markdown.includes(`## ${h}`), h);
   assert.equal(r.reviews.length, 2, "one failing review, one passing review");
   assert.equal(r.metrics.revisions, 1);

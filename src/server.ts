@@ -68,9 +68,10 @@ export async function startServer(opts: { port: number; mock?: boolean; host?: s
             sections: d.sections.map((s) => s.heading),
             researchSections: d.sections.filter((s) => s.research).length,
           })),
-          model: opts.mock ? "mock" : cfg.model,
+          model: opts.mock ? "mock" : cfg.apiKey ? cfg.model : "free (Wikipedia + OpenAlex)",
+          hasKey: !!opts.mock || !!cfg.apiKey,
           mock: !!opts.mock,
-          ready: opts.mock || !!cfg.apiKey,
+          ready: true,
         });
       }
 
@@ -165,7 +166,7 @@ export async function startServer(opts: { port: number; mock?: boolean; host?: s
         if (!DOC_TYPES.some((d) => d.id === body.docType)) return json(res, 400, { error: "Unknown document type." });
         let llm;
         try {
-          llm = createLLM({ mock: opts.mock || body.mock === true });
+          llm = createLLM({ mock: opts.mock || body.mock === true, free: !opts.mock && !settings().apiKey });
         } catch (e: any) {
           return json(res, 400, { error: e.message, code: "NO_KEY" });
         }
@@ -179,7 +180,7 @@ export async function startServer(opts: { port: number; mock?: boolean; host?: s
           audience: body.audience?.slice(0, 200) || undefined,
           instructions: body.instructions?.slice(0, 2000) || undefined,
           maxQuestions: clamp(Number(body.maxQuestions) || 6, 1, 20),
-          maxRevisions: clamp(Number(body.maxRevisions ?? 1), 0, 3),
+          maxRevisions: llm.name.startsWith("free") ? 0 : clamp(Number(body.maxRevisions ?? 1), 0, 3),
           web: body.web !== false,
         });
         const id = `run${++counter}-${Date.now().toString(36)}`;

@@ -568,6 +568,11 @@
       <li><b>Assembler</b> removes invalid citations, renumbers them and builds the references.</li>
       <li><b>Reviewer</b> scores the draft against the rubric. Below the pass score, the supervisor researches the gaps and sends writers back to revise.</li>
     </ol>
+    <h3>Free mode vs. Gemini mode</h3>
+    <ul>
+      <li><b>Free mode</b> (no key): researchers search Wikipedia and OpenAlex (250M+ scholarly works). The draft is built from quoted sentences of those sources, each cited and linked — nothing is invented.</li>
+      <li><b>Gemini mode</b> (free API key in Settings): researchers use Google Search grounding and writers produce an AI-written synthesis, reviewed and revised against the rubric.</li>
+    </ul>
     <h3>Tips</h3>
     <ul>
       <li>Be specific: “EU offshore wind costs since 2020 for a finance audience” beats “wind power”.</li>
@@ -826,6 +831,12 @@ function estimate() {
   return 1 + questions + sections + 1 + S.opts.maxRevisions * revision;
 }
 function renderBudget() {
+  if (S.config && !S.config.hasKey) {
+    $("budget").className = "budget";
+    const q = Math.min(S.opts.maxQuestions, 8);
+    $("budget").innerHTML = `${icon("globe")}<span><b>Free mode</b>: about ${q * 2 + Math.min(q, 4)} requests to Wikipedia and OpenAlex — no key or quota needed. Revisions need a Gemini key.</span>`;
+    return;
+  }
   const n = estimate(); if (!n) return;
   const big = n > 20;
   $("budget").className = "budget" + (big ? " warn" : "");
@@ -938,7 +949,7 @@ function renderQuality() {
   $("qualityBadge").innerHTML = last.passes ? `<span class="badge ok">Passed</span>` : `<span class="badge ai">Round ${last.iteration}</span>`;
   $("quality").innerHTML = `<div class="score-row"><strong>${last.score}</strong><span>/ 10 reviewer score</span></div>
     <div style="padding:6px 14px 10px"><div class="track ${cls}"><div style="width:${last.score * 10}%"></div></div></div>
-    <div class="rounds">${S.reviews.map((r) => `<div class="round"><b>Round ${r.iteration} · ${r.score}/10</b> — ${r.passes ? "passed" : "revision requested"}<p>${esc(r.summary)}</p>${r.sectionFeedback.length ? `<ul>${r.sectionFeedback.slice(0, 5).map((f) => `<li>${esc(f.feedback)}</li>`).join("")}</ul>` : ""}${r.gapQuestions.length ? `<p>Gap research: ${r.gapQuestions.map((g) => esc(g.question)).join(" · ")}</p>` : ""}</div>`).join("")}</div>`;
+    <div class="rounds">${S.reviews.map((r, i) => `<div class="round"><b>Round ${r.iteration} · ${r.score}/10</b> — ${r.passes ? "passed" : i < S.reviews.length - 1 || S.running ? "revision requested" : "below the bar"}<p>${esc(r.summary)}</p>${r.sectionFeedback.length ? `<ul>${r.sectionFeedback.slice(0, 5).map((f) => `<li>${esc(f.feedback)}</li>`).join("")}</ul>` : ""}${r.gapQuestions.length ? `<p>Gap research: ${r.gapQuestions.map((g) => esc(g.question)).join(" · ")}</p>` : ""}</div>`).join("")}</div>`;
 }
 function renderSources() {
   const refs = S.refs;
@@ -1008,8 +1019,8 @@ function setRunning(on) {
   S.running = on;
   $("assist").classList.toggle("running", on);
   $("go").className = on ? "primary stop" : "primary";
-  const demo = STATIC && !S.config?.hasKey;
-  $("go").innerHTML = on ? `${icon("stop")}<span>Stop</span>` : demo ? `${icon("sparkles")}<span>Try demo</span>` : `${icon("feather")}<span>Draft</span>`;
+  const free = S.config && !S.config.hasKey;
+  $("go").innerHTML = on ? `${icon("stop")}<span>Stop</span>` : free ? `${icon("feather")}<span>Draft free</span>` : `${icon("feather")}<span>Draft</span>`;
   $("go").disabled = !on && !S.config?.ready;
   renderTypes();
 }
@@ -1115,13 +1126,11 @@ $("sSave").onclick = async () => {
 async function loadConfig() {
   try {
     S.config = await api.config();
-    const needKey = STATIC ? !S.config.hasKey : !S.config.ready;
+    const needKey = !S.config.hasKey;
     $("keyNeeded").hidden = !needKey;
-    $("keyMsg").innerHTML = STATIC
-      ? `<span class="long">Demo mode — simulated agents and placeholder sources. Add your free Gemini API key for real, cited research; it stays in this browser.</span><span class="short">Demo mode with simulated output. Add a free Gemini key for real research.</span>`
-      : "Connect a Gemini API key to start drafting.";
+    $("keyMsg").innerHTML = `<span class="long"><b>Free mode</b> — researches real sources on Wikipedia and OpenAlex and builds the draft from quoted, cited passages. Add a free Gemini API key for AI-written synthesis with Google Search${STATIC ? "; it stays in this browser" : ""}.</span><span class="short"><b>Free mode:</b> real Wikipedia &amp; OpenAlex sources, quoted and cited. Add a Gemini key for AI writing.</span>`;
     $("settingsBtn").classList.toggle("has-dot", needKey);
-    $("settingsBtn").title = needKey ? "Settings · API key needed" : `Settings · ${S.config.model}`;
+    $("settingsBtn").title = needKey ? "Settings · add a Gemini key for AI writing" : `Settings · ${S.config.model}`;
   } catch { S.config = { docTypes: [], ready: false }; S.error = "Can't reach the Scriptorium server. Is it still running?"; }
   setRunning(S.running); renderTypes(); renderAll();
 }

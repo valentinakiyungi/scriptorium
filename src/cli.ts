@@ -25,7 +25,8 @@ Draft options
       --no-web               Skip Google Search; use local documents in ./data only
       --data <dir>           Folder of .md/.txt files to include as sources
   -o, --out <dir>            Output folder (default: ./output)
-      --mock                 Offline demo mode (no API key needed)
+      --free                 Keyless mode: real Wikipedia + OpenAlex sources, quoted and cited
+      --mock                 Offline demo mode with simulated output (for testing)
       --quiet                Only print the output path
   -h, --help                 Show this help
 `;
@@ -46,6 +47,7 @@ async function main() {
       data: { type: "string" },
       out: { type: "string", short: "o" },
       mock: { type: "boolean" },
+      free: { type: "boolean" },
       quiet: { type: "boolean" },
       port: { type: "string", short: "p" },
       baseline: { type: "string" },
@@ -97,7 +99,8 @@ async function main() {
     dataDir: values.data,
   });
 
-  const llm = createLLM({ mock: values.mock });
+  const llm = createLLM({ mock: values.mock, free: values.free });
+  if (values.free) request.maxRevisions = 0;
   const quiet = !!values.quiet;
   const color = process.stdout.isTTY ? (c: number, s: string) => `\x1b[${c}m${s}\x1b[0m` : (_: number, s: string) => s;
   const agentColor: Record<string, number> = { supervisor: 35, planner: 36, researcher: 34, collator: 90, writer: 32, assembler: 90, reviewer: 33 };

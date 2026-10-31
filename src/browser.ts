@@ -3,7 +3,7 @@
 // to Google. Without a key, visitors can run the offline demo.
 import { DOC_TYPES } from "./doctypes.ts";
 import { GeminiLLM, listModels, rankModels } from "./llm/gemini.ts";
-import { MockLLM } from "./llm/mock.ts";
+import { OpenResearchLLM } from "./llm/open.ts";
 import { defaultRequest, runPipeline, slugify, type RunEvent, type RunResult } from "./pipeline.ts";
 
 const DEFAULT_MODEL = "gemini-3.8-flash";
@@ -69,8 +69,8 @@ export function createApi() {
           sections: d.sections.map((x) => x.heading),
           researchSections: d.sections.filter((x) => x.research).length,
         })),
-        model: s.apiKey ? s.model : "demo",
-        ready: true, // without a key, Draft runs the offline demo
+        model: s.apiKey ? s.model : "free (Wikipedia + OpenAlex)",
+        ready: true, // without a key, Draft runs free mode (Wikipedia + OpenAlex)
         hasKey: !!s.apiKey,
       };
     },
@@ -154,9 +154,9 @@ export function createApi() {
 
     async startRun(body: any, onEvent: (e: RunEvent | { type: "result"; result: RunResult }) => void) {
       const s = settings();
-      const demo = !s.apiKey || body.mock === true;
-      const llm = demo
-        ? new MockLLM(350)
+      const free = !s.apiKey;
+      const llm = free
+        ? new OpenResearchLLM()
         : new GeminiLLM({
             apiKey: s.apiKey,
             model: s.model,
@@ -173,13 +173,13 @@ export function createApi() {
         audience: body.audience || undefined,
         instructions: body.instructions || undefined,
         maxQuestions: Math.max(1, Math.min(20, Number(body.maxQuestions) || 6)),
-        maxRevisions: Math.max(0, Math.min(3, Number(body.maxRevisions ?? 1))),
+        maxRevisions: free ? 0 : Math.max(0, Math.min(3, Number(body.maxRevisions ?? 1))),
         web: body.web !== false,
       });
       const id = `${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}-${slugify(request.topic).slice(0, 40)}`;
       const abort = new AbortController();
       runs.set(id, { abort });
-      if (demo) onEvent({ type: "trace", event: { at: new Date().toISOString(), agent: "gemini", ms: 0, message: "Demo mode — simulated agents and placeholder sources. Add a Gemini API key in Settings for real research." } });
+      if (free) onEvent({ type: "trace", event: { at: new Date().toISOString(), agent: "gemini", ms: 0, message: "Free mode — researching real sources on Wikipedia and OpenAlex; sections quote and cite them. Add a Gemini API key for AI-written synthesis." } });
 
       runPipeline(request, { llm, references: body.references ?? [], passScore: s.passScore, signal: abort.signal, onEvent })
         .then((result) => {

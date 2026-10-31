@@ -28,7 +28,7 @@ export class MockLLM implements LLM {
       const topic = tag(req.prompt, "topic") ?? "the topic";
       const sections = JSON.parse(tag(req.prompt, "sections") ?? "[]") as { id: string; heading: string; goal: string; needsResearch: boolean }[];
       out = {
-        title: titleCase(topic),
+        title: topic.charAt(0).toUpperCase() + topic.slice(1),
         summary: `A structured look at ${topic}.`,
         sections: sections.map((s) => ({
           id: s.id,
@@ -112,8 +112,4 @@ export class MockLLM implements LLM {
 
 function tag(s: string, name: string): string | undefined {
   return s.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)</${name}>`))?.[1]?.trim();
-}
-
-function titleCase(s: string): string {
-  return s.replace(/\b\w/g, (c) => c.toUpperCase());
 }

@@ -45,8 +45,14 @@ Writing a well-sourced report means hours of searching, reading, outlining, draf
 
 **Online — nothing to install:** open **[valentinakiyungi.github.io/scriptorium](https://valentinakiyungi.github.io/scriptorium/)**.
 
-- Press **Try demo** to watch the full agent workflow with simulated output.
-- For real research, open ⚙️ **Settings** and paste a free [Gemini API key](https://aistudio.google.com/apikey). It's stored only in your browser and sent only to Google.
+Two ways to use it — both cite **real, clickable sources**:
+
+| | **Free mode** (no key) | **Gemini mode** (free API key) |
+|---|---|---|
+| Research | Wikipedia articles + OpenAlex scholarly papers | Live Google Search grounding |
+| Writing | Sections built from **quoted** sentences of the sources — nothing invented | AI-written synthesis by Gemini |
+| Review | Automated citation checks | Rubric scoring + revision rounds |
+| Setup | Just press **Draft free** | ⚙️ **Settings** → paste a [Gemini API key](https://aistudio.google.com/apikey) — stored only in your browser |
 
 ## How it works
 
@@ -125,7 +131,8 @@ Every run writes `output/<timestamp>-<topic>/document.md` plus `run.json` (plan,
 | `-r, --max-revisions` | `1` | Reviewer-driven revision rounds |
 | `--no-web` | – | Use only local documents in `./data` |
 | `--data <dir>` | `./data` | Local corpus folder |
-| `--mock` | – | Offline demo, no API key needed |
+| `--free` | – | Keyless mode: real Wikipedia + OpenAlex sources, quoted and cited |
+| `--mock` | – | Offline simulated output (for tests) |
 
 </details>
 
@@ -189,7 +196,7 @@ The same LangGraph pipeline powers three front-ends: the hosted **browser app** 
 ```bash
 npm test               # 20 tests, fully offline
 npm run typecheck
-npm run demo           # local web app with the mock model
+npm run demo           # local web app with simulated output (no network)
 npm run build:pages    # static site → dist/pages
 npm run bench          # one task per document type, writes a benchmark report
 ```
