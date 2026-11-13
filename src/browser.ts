@@ -2,9 +2,15 @@
 // browser. Bring-your-own Gemini key, stored only in this browser's localStorage and sent only
 // to Google. Without a key, visitors can run the offline demo.
 import { DOC_TYPES } from "./doctypes.ts";
-import { GeminiLLM, listModels, rankModels } from "./llm/gemini.ts";
-import { OpenResearchLLM } from "./llm/open.ts";
-import { defaultRequest, runPipeline, slugify, type RunEvent, type RunResult } from "./pipeline.ts";
+import type { RunEvent, RunResult } from "./pipeline.ts";
+
+// The research engine (LangGraph, agents, providers) is loaded on demand, so phones only download
+// the small UI layer on first visit. preloadEngine() warms it up while the visitor is typing.
+let enginePromise: Promise<typeof import("./engine.ts")> | undefined;
+export function preloadEngine() {
+  enginePromise ??= import("./engine.ts");
+  return enginePromise;
+}
 
 const DEFAULT_MODEL = "gemini-3.8-flash";
 const API = (): string => (globalThis as any).SCRIPTORIUM_API_BASE || "https://generativelanguage.googleapis.com/v1beta/models";
@@ -55,6 +61,11 @@ export function createApi() {
   return {
     mode: "static" as const,
 
+    /** Start downloading the research engine in the background. */
+    preload() {
+      void preloadEngine().catch(() => {});
+    },
+
     async config() {
       const s = settings();
       return {
@@ -102,6 +113,7 @@ export function createApi() {
         const d: any = await r.json().catch(() => ({}));
         if (r.ok) return { ok: true, message: `Connected — ${d.displayName ?? model} is available.` };
         if (r.status === 404 || r.status === 400) {
+          const { listModels, rankModels } = await preloadEngine();
           const best = await listModels(key).then((m) => rankModels(m.map((x) => x.id))[0]).catch(() => undefined);
           if (best) return { ok: false, suggest: best, message: `Your key works, but "${model}" isn't available to it. Use ${best} instead.` };
         }
@@ -115,6 +127,7 @@ export function createApi() {
       const key = b.apiKey?.trim() || settings().apiKey;
       if (!key) return { models: [] };
       try {
+        const { listModels, rankModels } = await preloadEngine();
         const all = await listModels(key);
         const order = rankModels(all.map((m) => m.id));
         const byId = new Map(all.map((m) => [m.id, m]));
@@ -153,6 +166,7 @@ export function createApi() {
     },
 
     async startRun(body: any, onEvent: (e: RunEvent | { type: "result"; result: RunResult }) => void) {
+      const { GeminiLLM, OpenResearchLLM, defaultRequest, runPipeline, slugify } = await preloadEngine();
       const s = settings();
       const free = !s.apiKey;
       const llm = free

@@ -1,9 +1,11 @@
 // Builds the static GitHub Pages site into dist/pages:
-//   - bundles the browser pipeline (src/browser.ts) with esbuild
-//   - copies the web app and wires it to the in-browser pipeline
+//   - bundles the browser app (src/browser.ts) with esbuild, code-split so the research engine
+//     (LangGraph + agents) is a separate chunk loaded on demand
+//   - copies the web app, icons and web-app manifest, and writes an offline-capable service worker
 import { build } from "esbuild";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { createHash } from "node:crypto";
+import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -14,13 +16,15 @@ rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 
 const result = await build({
-  entryPoints: [join(root, "src", "browser.ts")],
-  outfile: join(out, "scriptorium.js"),
+  entryPoints: { scriptorium: join(root, "src", "browser.ts") },
+  outdir: out,
+  entryNames: "[name]-[hash]",
+  chunkNames: "chunks/[name]-[hash]",
   bundle: true,
-  format: "iife",
-  globalName: "ScriptoriumBrowser",
+  splitting: true,
+  format: "esm",
   platform: "browser",
-  target: ["es2022"],
+  target: ["es2022", "safari16"],
   minify: true,
   sourcemap: false,
   legalComments: "none",
@@ -31,17 +35,82 @@ const result = await build({
   logLevel: "warning",
 });
 
+const outputs = Object.entries(result.metafile.outputs).map(([file, o]) => ({ file: relative(out, join(root, file)).replace(/\\/g, "/"), bytes: o.bytes, entry: !!o.entryPoint }));
+const entry = outputs.find((o) => o.entry)?.file;
+if (!entry) throw new Error("esbuild produced no entry file");
+
+// Icons + manifest
+cpSync(join(root, "public", "icons"), join(out, "icons"), { recursive: true });
+const manifest = {
+  name: "Scriptorium",
+  short_name: "Scriptorium",
+  description: "AI agents that research the web and draft cited documents.",
+  start_url: "./",
+  scope: "./",
+  display: "standalone",
+  orientation: "any",
+  background_color: "#f3f2ef",
+  theme_color: "#6366f1",
+  categories: ["productivity", "education", "utilities"],
+  icons: [
+    { src: "icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+    { src: "icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+    { src: "icons/maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+  ],
+};
+writeFileSync(join(out, "manifest.webmanifest"), JSON.stringify(manifest, null, 2));
+
+// Page
 const html = readFileSync(join(root, "public", "index.html"), "utf8");
-const meta = `<meta name="description" content="Scriptorium — an autonomous multi-agent research and drafting system. A LangGraph Supervisor-Worker team researches the live web with Gemini and drafts structured, cited documents." />
+const meta = `<meta name="description" content="Scriptorium — an autonomous multi-agent research and drafting system. A LangGraph Supervisor-Worker team researches the web and drafts structured, cited documents." />
 <meta property="og:title" content="Scriptorium — autonomous research & drafting" />
-<meta property="og:description" content="AI agents research the live web, draft every section in parallel and fact-check themselves — returning a structured, cited document." />
-<meta property="og:type" content="website" />`;
-const boot = `<script>window.SCRIPTORIUM_REPO = ${JSON.stringify(repo)};</script>\n<script src="./scriptorium.js"></script>\n`;
-if (!html.includes("<script>\n// ── Icons")) throw new Error("index.html layout changed: can't find the main script to inject before");
-const page = html.replace("</title>", `</title>\n${meta}`).replace("<script>\n// ── Icons", `${boot}<script>\n// ── Icons`);
+<meta property="og:description" content="AI agents research the web, draft every section in parallel and fact-check themselves — returning a structured, cited document." />
+<meta property="og:type" content="website" />
+<link rel="manifest" href="./manifest.webmanifest" />
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Scriptorium" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<link rel="modulepreload" href="./${entry}" />`;
+// The page script runs first and talks to the browser API through a promise, so the UI paints
+// before the module has loaded.
+const boot = `<script>window.SCRIPTORIUM_REPO = ${JSON.stringify(repo)}; window.SCRIPTORIUM_STATIC = true;</script>
+<script type="module">import * as B from "./${entry}"; window.ScriptoriumBrowser = B; dispatchEvent(new Event("scriptorium-ready"));</script>
+`;
+const marker = "<script>\n// ── Icons";
+if (!html.includes(marker)) throw new Error("index.html layout changed: can't find the main script to inject before");
+const page = html.replace("</title>", `</title>\n${meta}`).replace(marker, `${boot}${marker}`);
 writeFileSync(join(out, "index.html"), page);
 writeFileSync(join(out, ".nojekyll"), "");
 
+// Service worker: app shell available offline; hashed files cached forever; the page itself is
+// network-first so new deploys show up immediately. Research APIs (other origins) are never cached.
+const files = ["./", ...outputs.map((o) => `./${o.file}`), "./manifest.webmanifest", ...["icon-192.png", "icon-512.png", "maskable-512.png", "apple-touch-icon.png"].map((f) => `./icons/${f}`)];
+const version = createHash("sha256").update(page).update(files.join()).digest("hex").slice(0, 12);
+writeFileSync(
+  join(out, "sw.js"),
+  `// Scriptorium service worker — generated by scripts/build-pages.mjs
+const CACHE = "scriptorium-${version}";
+const SHELL = ${JSON.stringify(files)};
+self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
+self.addEventListener("activate", (e) => {
+  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k.startsWith("scriptorium-") && k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
+});
+self.addEventListener("fetch", (e) => {
+  const req = e.request;
+  const url = new URL(req.url);
+  if (req.method !== "GET" || url.origin !== location.origin) return;
+  if (req.mode === "navigate") {
+    e.respondWith(fetch(req).then((res) => { const copy = res.clone(); caches.open(CACHE).then((c) => c.put("./", copy)); return res; }).catch(() => caches.match("./")));
+    return;
+  }
+  e.respondWith(caches.match(req).then((hit) => hit || fetch(req).then((res) => { if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); } return res; })));
+});
+`,
+);
+
 const kb = (n) => `${(n / 1024).toFixed(0)} KB`;
-const bytes = Object.values(result.metafile.outputs).reduce((a, o) => a + (o.bytes || 0), 0);
-console.log(`✔ Built GitHub Pages site → dist/pages (bundle ${kb(bytes)})`);
+const first = outputs.find((o) => o.file === entry);
+const rest = outputs.filter((o) => o.file !== entry).reduce((a, o) => a + o.bytes, 0);
+console.log(`✔ Built GitHub Pages site → dist/pages  (first load ${kb(first.bytes)}, engine ${kb(rest)} on demand, ${basename(entry)})`);

@@ -39,6 +39,7 @@ Writing a well-sourced report means hours of searching, reading, outlining, draf
 | ✅ **Self-review loop** | A reviewer scores each draft against a rubric for the document type and sends it back to research the gaps and revise. |
 | 🗂️ **7 document types** | Research reports, literature reviews, executive briefs, policy memos, whitepapers, blog articles and grant proposals. |
 | 🔐 **Private by design** | The hosted version runs entirely in your browser — your API key never touches a server. |
+| 📱 **Built for phones** | Installable as an app, works offline, loads in a few KB, with tap-to-preview citations and a native share sheet. |
 | 🛟 **Resilient to API limits** | Handles rate limits, daily quotas and retired models by waiting or switching models automatically. |
 
 ## Try it
