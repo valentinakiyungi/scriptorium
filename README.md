@@ -95,7 +95,7 @@ flowchart LR
 | **Blog Article** | Introduction · What's Going On · What the Evidence Says · Different Perspectives · Takeaways |
 | **Grant Proposal** | Project Summary · Statement of Need · Aims & Objectives · Approach & Methods · Impact & Evaluation · Budget & Timeline |
 
-Each type defines its tone, target length and review rubric in [`src/doctypes.ts`](src/doctypes.ts) — add your own in a few lines.
+Each type defines its tone, target length, and review rubric in [`src/doctypes.ts`](src/doctypes.ts) — add your own in a few lines.
 
 ## Quick start
 
@@ -125,7 +125,7 @@ Every run writes `output/<timestamp>-<topic>/document.md` plus `run.json` (plan,
 
 | Option | Default | Description |
 |---|---|---|
-| `-t, --type` | `research-report` | Document type id (`npm run types` lists them) |
+| `-t, --type` | `research-report` | Document type ID (`npm run types` lists them) |
 | `-a, --audience` | per type | Who the document is for |
 | `-i, --instructions` | – | Tone, focus, constraints |
 | `-q, --max-questions` | `6` | Research questions in the plan |
@@ -204,7 +204,7 @@ npm run bench          # one task per document type, writes a benchmark report
 
 ### Deployment
 
-Every push to `main` runs the tests, builds the static site and publishes it to GitHub Pages via [`.github/workflows/pages.yml`](.github/workflows/pages.yml).
+Every push to `main` runs the tests, builds the static site, and publishes it to GitHub Pages via [`.github/workflows/pages.yml`](.github/workflows/pages.yml).
 
 ## Roadmap
 
